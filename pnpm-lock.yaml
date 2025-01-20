@@ -7,10 +7,17 @@ settings:
 importers:
 
   .:
+    dependencies:
+      spark-md5:
+        specifier: ^3.0.2
+        version: 3.0.2
     devDependencies:
       '@types/node':
         specifier: ^16.11.6
         version: 16.18.124
+      '@types/spark-md5':
+        specifier: ^3.0.5
+        version: 3.0.5
       '@typescript-eslint/eslint-plugin':
         specifier: 5.29.0
         version: 5.29.0(@typescript-eslint/parser@5.29.0(eslint@8.57.1)(typescript@4.7.4))(eslint@8.57.1)(typescript@4.7.4)
@@ -230,6 +237,9 @@ packages:
 
   '@types/node@16.18.124':
     resolution: {integrity: sha512-8ADCm5WzM/IpWxjs1Jhtwo6j+Fb8z4yr/CobP5beUUPdyCI0mg87/bqQYxNcqnhZ24Dc9RME8SQWu5eI/FmSGA==}
+
+  '@types/spark-md5@3.0.5':
+    resolution: {integrity: sha512-lWf05dnD42DLVKQJZrDHtWFidcLrHuip01CtnC2/S6AMhX4t9ZlEUj4iuRlAnts0PQk7KESOqKxeGE/b6sIPGg==}
 
   '@types/tern@0.23.9':
     resolution: {integrity: sha512-ypzHFE/wBzh+BlH6rrBgS5I/Z7RD21pGhZ2rltb/+ZrVM1awdZwjx7hE5XfuYgHWk9uvV5HLZN3SloevCAp3Bw==}
@@ -686,6 +696,9 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
+  spark-md5@3.0.2:
+    resolution: {integrity: sha512-wcFzz9cDfbuqe0FZzfi2or1sgyIrsDwmPwfZC4hiNidPdPINjeUwNfv5kldczoEAcjl9Y1L3SM7Uz2PUEQzxQw==}
+
   strip-ansi@6.0.1:
     resolution: {integrity: sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==}
     engines: {node: '>=8'}
@@ -891,6 +904,8 @@ snapshots:
   '@types/json-schema@7.0.15': {}
 
   '@types/node@16.18.124': {}
+
+  '@types/spark-md5@3.0.5': {}
 
   '@types/tern@0.23.9':
     dependencies:
@@ -1376,6 +1391,8 @@ snapshots:
   shebang-regex@3.0.0: {}
 
   slash@3.0.0: {}
+
+  spark-md5@3.0.2: {}
 
   strip-ansi@6.0.1:
     dependencies:

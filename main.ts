@@ -7,6 +7,7 @@ import {
 	TAbstractFile,
 	TFile,
 } from "obsidian";
+import * as SparkMD5 from "spark-md5";
 
 interface Obsidian2JadeSettings {
 	mySetting: string;
@@ -17,6 +18,8 @@ const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	mySetting: "default",
 	modifiedFiles: {},
 };
+
+const CHUNK_SIZE = 1 * 1024 * 1024;
 
 export default class Obsidian2JadePlugin extends Plugin {
 	settings: Obsidian2JadeSettings;
@@ -81,8 +84,16 @@ export default class Obsidian2JadePlugin extends Plugin {
 
 		this.addRibbonIcon("dice", "Publish", (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
-			this.settings.modifiedFiles = {};
-			this.saveSettings();
+			Object.keys(this.settings.modifiedFiles).forEach((key) => {
+				const file = this.app.vault.getFileByPath(key);
+				console.log(file);
+				this.app.vault.readBinary(file!).then((data) => {
+					const md5 = SparkMD5.ArrayBuffer.hash(data);
+					console.log(`${file?.basename} md5: ${md5}`);
+				});
+			});
+			// this.settings.modifiedFiles = {};
+			// this.saveSettings();
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
