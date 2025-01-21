@@ -34,6 +34,18 @@ export default class Obsidian2JadePlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		this.app.workspace.onLayoutReady(() => {
+			this.registerEvent(
+				this.app.vault.on("create", (file: TAbstractFile) => {
+					this.settings.modifiedFiles = {
+						...this.settings.modifiedFiles,
+						[file.path]: Behaviors.CREATED,
+					};
+					this.saveSettings();
+				})
+			);
+		});
+
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				const activeFile: TFile | null =
@@ -44,6 +56,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 							...this.settings.modifiedFiles,
 							[file.path]: Behaviors.MODIFIED,
 						};
+						this.saveSettings();
+						console.log('file modified');
 					}
 				}
 			})
@@ -58,13 +72,14 @@ export default class Obsidian2JadePlugin extends Plugin {
 							...this.settings.modifiedFiles,
 							[file.path]: Behaviors.CREATED,
 						};
-						delete this.settings.modifiedFiles[oldPath];
 					} else {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
 							[file.path]: `${Behaviors.RENAMED}:${oldPath}`,
 						};
 					}
+					delete this.settings.modifiedFiles[oldPath];
+					this.saveSettings();
 				}
 			)
 		);
@@ -79,12 +94,9 @@ export default class Obsidian2JadePlugin extends Plugin {
 				} else {
 					delete this.settings.modifiedFiles[file.path];
 				}
+				this.saveSettings();
 			})
 		);
-
-		this.addRibbonIcon("dice", "Save", (evt: MouseEvent) => {
-			this.saveSettings();
-		});
 
 		const baseUrl = 'http://localhost:3000/api/sync';
 
@@ -140,16 +152,6 @@ export default class Obsidian2JadePlugin extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		this.app.workspace.onLayoutReady(() => {
-			this.registerEvent(
-				this.app.vault.on("create", (file: TAbstractFile) => {
-					this.settings.modifiedFiles = {
-						...this.settings.modifiedFiles,
-						[file.path]: "created",
-					};
-				})
-			);
-		});
 	}
 
 	onunload() {
