@@ -19,8 +19,21 @@ const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	modifiedFiles: {},
 };
 
-const CHUNK_SIZE = 1024 * 1024;
+// --- created ---
+// When file is created, no matter modifying or renaming it, the final behavior is still `created`.
+// When file is created, if it is deleted before publishing, it's record should not in modified files.
 
+// --- modified ---
+// When file is modified, it's final behavior will be `modified` only if it is not deleted.
+// When file is deleted after modified, it's final behavior should be `deleted`.
+
+// --- deleted ---
+// When file is deleted, it's final behavior is `deleted`.
+
+// --- renamed ---
+// When file is renamed, it's final behavior will be `renamed` only if it is not deleted.
+// When file is deleted after renamed, the behavior of the file before renamed should be deleted.
+// the record of the renamed file in the modified files should be removed.
 enum Behaviors {
 	CREATED = 'created',
 	MODIFIED = 'modified',
