@@ -1,13 +1,13 @@
 import {
-	App,
-	Notice,
+	type App,
 	Plugin,
 	PluginSettingTab,
 	Setting,
-	TAbstractFile,
-	TFile,
+	type TAbstractFile,
+	type TFile
 } from "obsidian";
 import * as SparkMD5 from "spark-md5";
+import {check, sync} from "./api";
 
 interface Obsidian2JadeSettings {
 	mySetting: string;
@@ -19,7 +19,14 @@ const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	modifiedFiles: {},
 };
 
-const CHUNK_SIZE = 1 * 1024 * 1024;
+const CHUNK_SIZE = 1024 * 1024;
+
+enum Behaviors {
+	CREATED = 'created',
+	MODIFIED = 'modified',
+	DELETED = 'deleted',
+	RENAMED = 'renamed'
+}
 
 export default class Obsidian2JadePlugin extends Plugin {
 	settings: Obsidian2JadeSettings;
@@ -32,10 +39,10 @@ export default class Obsidian2JadePlugin extends Plugin {
 				const activeFile: TFile | null =
 					this.app.workspace.getActiveFile();
 				if (file === activeFile) {
-					if (this.settings.modifiedFiles[file.path] !== "created") {
+					if (this.settings.modifiedFiles[file.path] !== Behaviors.CREATED) {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: "modified",
+							[file.path]: Behaviors.MODIFIED,
 						};
 					}
 				}
@@ -46,17 +53,16 @@ export default class Obsidian2JadePlugin extends Plugin {
 			this.app.vault.on(
 				"rename",
 				(file: TAbstractFile, oldPath: string) => {
-					if (this.settings.modifiedFiles[oldPath] === "created") {
+					if (this.settings.modifiedFiles[oldPath] === Behaviors.CREATED) {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: "created",
+							[file.path]: Behaviors.CREATED,
 						};
 						delete this.settings.modifiedFiles[oldPath];
 					} else {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: `renamed:${oldPath}`,
-							[oldPath]: "renamed",
+							[file.path]: `${Behaviors.RENAMED}:${oldPath}`,
 						};
 					}
 				}
@@ -65,10 +71,10 @@ export default class Obsidian2JadePlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.vault.on("delete", (file: TAbstractFile) => {
-				if (this.settings.modifiedFiles[file.path] !== "created") {
+				if (this.settings.modifiedFiles[file.path] !== Behaviors.CREATED) {
 					this.settings.modifiedFiles = {
 						...this.settings.modifiedFiles,
-						[file.path]: "deleted",
+						[file.path]: Behaviors.DELETED,
 					};
 				} else {
 					delete this.settings.modifiedFiles[file.path];
@@ -76,24 +82,59 @@ export default class Obsidian2JadePlugin extends Plugin {
 			})
 		);
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon("dice", "Sample Plugin", (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
+		this.addRibbonIcon("dice", "Save", (evt: MouseEvent) => {
 			this.saveSettings();
 		});
 
-		this.addRibbonIcon("dice", "Publish", (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			Object.keys(this.settings.modifiedFiles).forEach((key) => {
-				const file = this.app.vault.getFileByPath(key);
-				console.log(file);
-				this.app.vault.readBinary(file!).then((data) => {
-					const md5 = SparkMD5.ArrayBuffer.hash(data);
-					console.log(`${file?.basename} md5: ${md5}`);
-				});
-			});
-			// this.settings.modifiedFiles = {};
-			// this.saveSettings();
+		const baseUrl = 'http://localhost:3000/api/sync';
+
+		this.addRibbonIcon("dice", "Publish", async (evt: MouseEvent) => {
+			for (const key of Object.keys(this.settings.modifiedFiles)) {
+				const behavior = this.settings.modifiedFiles[key];
+
+				const formData = new FormData();
+				formData.append('path', key);
+
+				if (behavior === Behaviors.CREATED) {
+					formData.append('behavior', Behaviors.CREATED);
+
+					const file = this.app.vault.getFileByPath(key);
+					if (!file) {
+						continue;
+					}
+
+					this.app.vault.readBinary(file).then(async (data) => {
+						const md5 = SparkMD5.ArrayBuffer.hash(data);
+						const {data: {exists}} = await check(baseUrl, md5)
+						formData.append('md5', md5);
+						formData.append('extension', file.extension)
+						formData.append('exists', `${exists}`);
+						if (!exists) {
+							formData.append('file', new Blob([data]));
+						}
+						const resp = await sync(baseUrl, formData)
+						console.log(resp);
+					});
+				} else if (behavior === Behaviors.DELETED) {
+					formData.append('behavior', Behaviors.DELETED);
+
+					const resp = await sync(baseUrl, formData)
+					console.log(resp);
+				} else if (behavior.includes(Behaviors.RENAMED)) {
+					formData.append('behavior', Behaviors.RENAMED);
+
+					const oldPath = behavior.split(":")[1]
+					formData.append('oldPath', oldPath);
+					const resp = await sync(baseUrl, formData)
+					// TODO: Solve the situation when file content changes
+					console.log(resp);
+				} else {
+					// do nothing
+				}
+
+			}
+			this.settings.modifiedFiles = {};
+			await this.saveSettings();
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
@@ -111,7 +152,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 		});
 	}
 
-	onunload() {}
+	onunload() {
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -135,21 +177,21 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const { containerEl } = this;
+		const {containerEl} = this;
 
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Setting #1")
-			.setDesc("It's a secret")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter your secret")
-					.setValue(this.plugin.settings.mySetting)
-					.onChange(async (value) => {
-						this.plugin.settings.mySetting = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		.setName("Setting #1")
+		.setDesc("It's a secret")
+		.addText((text) =>
+			text
+			.setPlaceholder("Enter your secret")
+			.setValue(this.plugin.settings.mySetting)
+			.onChange(async (value) => {
+				this.plugin.settings.mySetting = value;
+				await this.plugin.saveSettings();
+			})
+		);
 	}
 }
