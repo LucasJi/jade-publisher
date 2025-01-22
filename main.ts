@@ -1,5 +1,6 @@
 import {
 	type App,
+	moment,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -7,7 +8,7 @@ import {
 	type TFile
 } from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import {check, sync} from "./api";
+import {check, rebuild, sync} from "./api";
 
 interface Obsidian2JadeSettings {
 	mySetting: string;
@@ -19,21 +20,6 @@ const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	modifiedFiles: {},
 };
 
-// --- created ---
-// When file is created, no matter modifying or renaming it, the final behavior is still `created`.
-// When file is created, if it is deleted before publishing, it's record should not in modified files.
-
-// --- modified ---
-// When file is modified, it's final behavior will be `modified` only if it is not deleted.
-// When file is deleted after modified, it's final behavior should be `deleted`.
-
-// --- deleted ---
-// When file is deleted, it's final behavior is `deleted`.
-
-// --- renamed ---
-// When file is renamed, it's final behavior will be `renamed` only if it is not deleted.
-// When file is deleted after renamed, the behavior of the file before renamed should be deleted.
-// the record of the renamed file in the modified files should be removed.
 enum Behaviors {
 	CREATED = 'created',
 	MODIFIED = 'modified',
@@ -125,8 +111,40 @@ export default class Obsidian2JadePlugin extends Plugin {
 		);
 
 		const baseUrl = 'http://localhost:3000/api/sync';
+		this.addRibbonIcon("folder-sync", "Sync Vault", async () => {
+			const files = this.app.vault.getFiles();
+			const responses: Promise<{ path: string; md5: string }>[] = [];
 
-		this.addRibbonIcon("dice", "Publish", async (evt: MouseEvent) => {
+			for (const file of files) {
+				const formData = new FormData();
+				formData.append('path', file.path);
+				formData.append('behavior', Behaviors.CREATED);
+				const resp = this.app.vault.readBinary(file).then(async buff => {
+					const md5 = SparkMD5.ArrayBuffer.hash(buff);
+					return check(baseUrl, md5).then(async ({data: {exists}}) => {
+						formData.append('md5', md5);
+						formData.append('extension', file.extension);
+						formData.append('exists', `${exists}`);
+						formData.append('lastModified', moment(file.stat.mtime).format('YYYY-MM-DD HH:mm:ss'));
+						if (!exists) {
+							formData.append('file', new Blob([buff]));
+						}
+						return sync(baseUrl, formData).then(() => ({
+							path: file.path,
+							md5,
+						}));
+					})
+				});
+				responses.push(resp);
+			}
+
+			Promise.all(responses).then((details) => {
+				rebuild(baseUrl, {files: details, clearOthers: true});
+			});
+
+		});
+
+		this.addRibbonIcon("rocket", "Publish to Jade", async (evt: MouseEvent) => {
 			for (const key of Object.keys(this.settings.modifiedFiles)) {
 				const behavior = this.settings.modifiedFiles[key];
 
@@ -136,40 +154,69 @@ export default class Obsidian2JadePlugin extends Plugin {
 				if (behavior === Behaviors.CREATED) {
 					formData.append('behavior', Behaviors.CREATED);
 
-					const file = this.app.vault.getFileByPath(key);
-					if (!file) {
+					const createdFile = this.app.vault.getFileByPath(key);
+					if (!createdFile) {
 						continue;
 					}
 
-					this.app.vault.readBinary(file).then(async (data) => {
+					this.app.vault.readBinary(createdFile).then((data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
-						const {data: {exists}} = await check(baseUrl, md5)
-						formData.append('md5', md5);
-						formData.append('extension', file.extension)
-						formData.append('exists', `${exists}`);
-						if (!exists) {
-							formData.append('file', new Blob([data]));
-						}
-						const resp = await sync(baseUrl, formData)
-						console.log(resp);
+						check(baseUrl, md5).then(({data: {exists}}) => {
+							formData.append('md5', md5);
+							formData.append('extension', createdFile.extension)
+							formData.append('exists', `${exists}`);
+							formData.append('lastModified', moment(createdFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+							if (!exists) {
+								formData.append('file', new Blob([data]));
+							}
+							sync(baseUrl, formData)
+						});
 					});
 				} else if (behavior === Behaviors.DELETED) {
 					formData.append('behavior', Behaviors.DELETED);
 
-					const resp = await sync(baseUrl, formData)
-					console.log(resp);
+					await sync(baseUrl, formData)
 				} else if (behavior.includes(Behaviors.RENAMED)) {
-					formData.append('behavior', Behaviors.RENAMED);
-
 					const oldPath = behavior.split(":")[1]
+
+					formData.append('behavior', Behaviors.RENAMED);
 					formData.append('oldPath', oldPath);
-					const resp = await sync(baseUrl, formData)
-					// TODO: Solve the situation when file content changes
-					console.log(resp);
+
+					const renamedFile = this.app.vault.getFileByPath(key);
+					if (!renamedFile) {
+						continue;
+					}
+
+					this.app.vault.readBinary(renamedFile).then((data) => {
+						const md5 = SparkMD5.ArrayBuffer.hash(data);
+						check(baseUrl, md5).then(({data: {exists}}) => {
+							formData.append('md5', md5);
+							formData.append('extension', renamedFile.extension)
+							formData.append('exists', `${exists}`);
+							formData.append('lastModified', moment(renamedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+							if (!exists) {
+								formData.append('file', new Blob([data]));
+							}
+							sync(baseUrl, formData)
+						});
+					});
+				} else if (behavior === Behaviors.DELETED) {
+					const modifiedFile = this.app.vault.getFileByPath(key);
+					if (!modifiedFile) {
+						continue;
+					}
+
+					this.app.vault.readBinary(modifiedFile).then((data) => {
+						const md5 = SparkMD5.ArrayBuffer.hash(data);
+						formData.append('md5', md5);
+						formData.append('extension', modifiedFile.extension)
+						formData.append('lastModified', moment(modifiedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+						formData.append('file', new Blob([data]));
+						sync(baseUrl, formData)
+					});
 				} else {
 					// do nothing
 				}
-
 			}
 			this.settings.modifiedFiles = {};
 			await this.saveSettings();

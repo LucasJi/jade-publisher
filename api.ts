@@ -1,4 +1,4 @@
-export const check = (baseUrl: string, md5: string): Promise<{
+export const check = async (baseUrl: string, md5: string): Promise<{
 	data: {
 		exists: boolean
 	};
@@ -9,9 +9,25 @@ export const check = (baseUrl: string, md5: string): Promise<{
 	}).then(resp => resp.json());
 }
 
-export const sync = (baseUrl: string, formData: FormData) => {
+export const sync = async (baseUrl: string, formData: FormData) => {
 	return fetch(`${baseUrl}`, {
 		method: 'POST',
 		body: formData
+	}).then(resp => resp.json());
+}
+
+export const rebuild = async (baseUrl: string, body: {
+	files: {
+		path: string;
+		md5: string;
+	}[];
+	clearOthers: boolean;
+}) => {
+	return fetch(`${baseUrl}/rebuild`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(body),
 	}).then(resp => resp.json());
 }
