@@ -59,23 +59,35 @@ export default class Obsidian2JadePlugin extends Plugin {
 			);
 		});
 
+		// If a file can be modified, it's previous behavior must be `created`, `renamed` or empty.
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				const activeFile: TFile | null =
 					this.app.workspace.getActiveFile();
 				if (file === activeFile) {
-					if (this.settings.modifiedFiles[file.path] !== Behaviors.CREATED) {
+					if (this.settings.modifiedFiles[file.path] === Behaviors.CREATED) {
+						this.settings.modifiedFiles = {
+							...this.settings.modifiedFiles,
+							[file.path]: Behaviors.CREATED,
+						};
+					} else if (this.settings.modifiedFiles[file.path] === Behaviors.RENAMED) {
+						this.settings.modifiedFiles = {
+							...this.settings.modifiedFiles,
+							[file.path]: Behaviors.RENAMED,
+						};
+					} else {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
 							[file.path]: Behaviors.MODIFIED,
 						};
-						this.saveSettings();
-						console.log('file modified');
 					}
+
+					this.saveSettings();
 				}
 			})
 		);
 
+		// If a file can be renamed, it's previous behavior must be `created`, `renamed`, `modified` or empty.
 		this.registerEvent(
 			this.app.vault.on(
 				"rename",
@@ -97,6 +109,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 			)
 		);
 
+		// If a file can be deleted, it's previous behavior must be `created`, `renamed`, `modified` or empty.
 		this.registerEvent(
 			this.app.vault.on("delete", (file: TAbstractFile) => {
 				if (this.settings.modifiedFiles[file.path] !== Behaviors.CREATED) {
