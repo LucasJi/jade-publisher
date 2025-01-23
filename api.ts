@@ -20,6 +20,8 @@ export const rebuild = async (baseUrl: string, body: {
 	files: {
 		path: string;
 		md5: string;
+		extension: string;
+		lastModified: string;
 	}[];
 	clearOthers: boolean;
 }) => {

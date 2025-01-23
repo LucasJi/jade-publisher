@@ -113,7 +113,12 @@ export default class Obsidian2JadePlugin extends Plugin {
 		const baseUrl = 'http://localhost:3000/api/sync';
 		this.addRibbonIcon("folder-sync", "Sync Vault", async () => {
 			const files = this.app.vault.getFiles();
-			const responses: Promise<{ path: string; md5: string }>[] = [];
+			const responses: Promise<{
+				path: string;
+				md5: string;
+				extension: string;
+				lastModified: string
+			}>[] = [];
 
 			for (const file of files) {
 				const formData = new FormData();
@@ -125,13 +130,16 @@ export default class Obsidian2JadePlugin extends Plugin {
 						formData.append('md5', md5);
 						formData.append('extension', file.extension);
 						formData.append('exists', `${exists}`);
-						formData.append('lastModified', moment(file.stat.mtime).format('YYYY-MM-DD HH:mm:ss'));
+						const lastModified = moment(file.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
+						formData.append('lastModified', lastModified);
 						if (!exists) {
 							formData.append('file', new Blob([buff]));
 						}
 						return sync(baseUrl, formData).then(() => ({
 							path: file.path,
 							md5,
+							lastModified,
+							extension: file.extension,
 						}));
 					})
 				});
