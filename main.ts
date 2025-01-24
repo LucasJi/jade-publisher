@@ -153,11 +153,24 @@ export default class Obsidian2JadePlugin extends Plugin {
 		});
 
 		this.addRibbonIcon("rocket", "Publish to Jade", async (evt: MouseEvent) => {
+			const responses: Promise<{
+				path: string;
+				md5: string;
+				extension: string;
+				lastModified: string
+			}>[] = [];
 			for (const key of Object.keys(this.settings.modifiedFiles)) {
 				const behavior = this.settings.modifiedFiles[key];
 
 				const formData = new FormData();
 				formData.append('path', key);
+
+				let resp: Promise<{
+					path: string;
+					md5: string;
+					extension: string;
+					lastModified: string
+				}> | null = null;
 
 				if (behavior === Behaviors.CREATED) {
 					formData.append('behavior', Behaviors.CREATED);
@@ -167,17 +180,23 @@ export default class Obsidian2JadePlugin extends Plugin {
 						continue;
 					}
 
-					this.app.vault.readBinary(createdFile).then((data) => {
+					resp = this.app.vault.readBinary(createdFile).then(async (data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
-						check(baseUrl, md5).then(({data: {exists}}) => {
+						return check(baseUrl, md5).then(async ({data: {exists}}) => {
 							formData.append('md5', md5);
 							formData.append('extension', createdFile.extension)
 							formData.append('exists', `${exists}`);
-							formData.append('lastModified', moment(createdFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+							const lastModified = moment(createdFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
+							formData.append('lastModified', lastModified);
 							if (!exists) {
 								formData.append('file', new Blob([data]));
 							}
-							sync(baseUrl, formData)
+							return sync(baseUrl, formData).then(() => ({
+								path: createdFile.path,
+								md5,
+								lastModified,
+								extension: createdFile.extension,
+							}));
 						});
 					});
 				} else if (behavior === Behaviors.DELETED) {
@@ -195,37 +214,58 @@ export default class Obsidian2JadePlugin extends Plugin {
 						continue;
 					}
 
-					this.app.vault.readBinary(renamedFile).then((data) => {
+					resp = this.app.vault.readBinary(renamedFile).then(async (data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
-						check(baseUrl, md5).then(({data: {exists}}) => {
+						return check(baseUrl, md5).then(async ({data: {exists}}) => {
 							formData.append('md5', md5);
 							formData.append('extension', renamedFile.extension)
 							formData.append('exists', `${exists}`);
-							formData.append('lastModified', moment(renamedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+							const lastModified = moment(renamedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
+							formData.append('lastModified', lastModified);
 							if (!exists) {
 								formData.append('file', new Blob([data]));
 							}
-							sync(baseUrl, formData)
+							return sync(baseUrl, formData).then(() => ({
+								path: renamedFile.path,
+								md5,
+								lastModified,
+								extension: renamedFile.extension,
+							}));
 						});
 					});
-				} else if (behavior === Behaviors.DELETED) {
+				} else if (behavior === Behaviors.MODIFIED) {
+					formData.append('behavior', Behaviors.MODIFIED);
 					const modifiedFile = this.app.vault.getFileByPath(key);
 					if (!modifiedFile) {
 						continue;
 					}
 
-					this.app.vault.readBinary(modifiedFile).then((data) => {
+					resp = this.app.vault.readBinary(modifiedFile).then(async (data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
 						formData.append('md5', md5);
 						formData.append('extension', modifiedFile.extension)
-						formData.append('lastModified', moment(modifiedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss'))
+						const lastModified = moment(modifiedFile.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
+						formData.append('lastModified', lastModified);
 						formData.append('file', new Blob([data]));
-						sync(baseUrl, formData)
+						return sync(baseUrl, formData).then(() => ({
+							path: modifiedFile.path,
+							md5,
+							lastModified,
+							extension: modifiedFile.extension,
+						}));
 					});
 				} else {
 					// do nothing
 				}
+
+				if (resp !== null) {
+					responses.push(resp);
+				}
 			}
+
+			Promise.all(responses).then((details) => {
+				rebuild(baseUrl, {files: details, clearOthers: false});
+			});
 			this.settings.modifiedFiles = {};
 			await this.saveSettings();
 		});
