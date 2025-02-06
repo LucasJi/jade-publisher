@@ -10,11 +10,16 @@ export const checkFileExists = async (baseUrl: string, md5: string): Promise<{
 }
 
 export const checkHealth = async (baseUrl: string): Promise<{ data: boolean, msg: string }> => {
+	const controller = new AbortController();
+	const signal = controller.signal;
+	const timeoutId = setTimeout(() => controller.abort(), 500);
+
 	return fetch(`${baseUrl}/check-health`, {
 		method: "GET",
-	}).then(resp => resp.json()).catch(e => ({
+		signal,
+	}).then(resp => resp.json()).catch(() => ({
 		data: false
-	}));
+	})).finally(() => clearTimeout(timeoutId));
 }
 
 export const sync = async (baseUrl: string, formData: FormData) => {
