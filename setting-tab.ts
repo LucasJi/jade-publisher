@@ -88,13 +88,15 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 					}
 
 					Promise.all(responses).then((details) => {
-						new Notice(
-							"Rebuilding your Jade service, please wait..."
+						const beginNotice = new Notice(
+							"Rebuilding your Jade service, please wait...",
+							0
 						);
 						rebuild(baseUrl, {
 							files: details,
 							clearOthers: true,
 						}).then(() => {
+							beginNotice.hide();
 							new Notice(
 								"Your Jade service rebuilds successfully"
 							);
