@@ -124,7 +124,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 
 		this.addRibbonIcon(
 			"rocket",
-			"Publish your changes to Jade",
+			"Sync your changes to Jade",
 			async (evt: MouseEvent) => {
 				if (!this.settings.endpoint) {
 					new Notice("Please setup your Jade endpoint");
