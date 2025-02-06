@@ -1,12 +1,20 @@
-export const check = async (baseUrl: string, md5: string): Promise<{
+export const checkFileExists = async (baseUrl: string, md5: string): Promise<{
 	data: {
 		exists: boolean
 	};
 	msg: string;
 }> => {
-	return fetch(`${baseUrl}/check?md5=${md5}`, {
+	return fetch(`${baseUrl}/check-file-exists?md5=${md5}`, {
 		method: "GET",
 	}).then(resp => resp.json());
+}
+
+export const checkHealth = async (baseUrl: string): Promise<{ data: boolean, msg: string }> => {
+	return fetch(`${baseUrl}/check-health`, {
+		method: "GET",
+	}).then(resp => resp.json()).catch(e => ({
+		data: false
+	}));
 }
 
 export const sync = async (baseUrl: string, formData: FormData) => {

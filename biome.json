@@ -11,7 +11,13 @@
 	},
 	"formatter": {
 		"enabled": true,
-		"indentStyle": "tab"
+		"formatWithErrors": false,
+		"ignore": [],
+		"attributePosition": "auto",
+		"indentStyle": "space",
+		"indentWidth": 2,
+		"lineEnding": "lf",
+		"lineWidth": 80
 	},
 	"organizeImports": {
 		"enabled": true
@@ -24,7 +30,12 @@
 	},
 	"javascript": {
 		"formatter": {
-			"quoteStyle": "single"
+			"arrowParentheses": "always",
+			"bracketSameLine": false,
+			"bracketSpacing": true,
+			"quoteProperties": "asNeeded",
+			"semicolons": "always",
+			"trailingCommas": "es5"
 		}
 	}
 }

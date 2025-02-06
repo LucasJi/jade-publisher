@@ -1,6 +1,7 @@
 import {
 	type App,
 	moment,
+	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -8,15 +9,15 @@ import {
 	type TFile
 } from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import {check, rebuild, sync} from "./api";
+import {checkFileExists, checkHealth, rebuild, sync} from "./api";
 
 interface Obsidian2JadeSettings {
-	mySetting: string;
+	endpoint: string;
 	modifiedFiles: Record<string, string>;
 }
 
 const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
-	mySetting: "default",
+	endpoint: "",
 	modifiedFiles: {},
 };
 
@@ -110,49 +111,19 @@ export default class Obsidian2JadePlugin extends Plugin {
 			})
 		);
 
-		const baseUrl = 'http://localhost:3000/api/sync';
-		this.addRibbonIcon("folder-sync", "Sync Vault", async () => {
-			const files = this.app.vault.getFiles();
-			const responses: Promise<{
-				path: string;
-				md5: string;
-				extension: string;
-				lastModified: string
-			}>[] = [];
-
-			for (const file of files) {
-				const formData = new FormData();
-				formData.append('path', file.path);
-				formData.append('behavior', Behaviors.CREATED);
-				const resp = this.app.vault.readBinary(file).then(async buff => {
-					const md5 = SparkMD5.ArrayBuffer.hash(buff);
-					return check(baseUrl, md5).then(async ({data: {exists}}) => {
-						formData.append('md5', md5);
-						formData.append('extension', file.extension);
-						formData.append('exists', `${exists}`);
-						const lastModified = moment(file.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
-						formData.append('lastModified', lastModified);
-						if (!exists) {
-							formData.append('file', new Blob([buff]));
-						}
-						return sync(baseUrl, formData).then(() => ({
-							path: file.path,
-							md5,
-							lastModified,
-							extension: file.extension,
-						}));
-					})
-				});
-				responses.push(resp);
-			}
-
-			Promise.all(responses).then((details) => {
-				rebuild(baseUrl, {files: details, clearOthers: true});
-			});
-
-		});
+		const baseUrl = `${this.settings.endpoint}/api/sync`;
 
 		this.addRibbonIcon("rocket", "Publish to Jade", async (evt: MouseEvent) => {
+			if (!this.settings.endpoint) {
+				new Notice('Please setup your Jade endpoint');
+			}
+
+			const checkHealthResp = await checkHealth(baseUrl)
+			if (!checkHealthResp.data) {
+				new Notice('Jade service is not available');
+				return;
+			}
+
 			const responses: Promise<{
 				path: string;
 				md5: string;
@@ -182,7 +153,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 
 					resp = this.app.vault.readBinary(createdFile).then(async (data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
-						return check(baseUrl, md5).then(async ({data: {exists}}) => {
+						return checkFileExists(baseUrl, md5).then(async ({data: {exists}}) => {
 							formData.append('md5', md5);
 							formData.append('extension', createdFile.extension)
 							formData.append('exists', `${exists}`);
@@ -216,7 +187,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 
 					resp = this.app.vault.readBinary(renamedFile).then(async (data) => {
 						const md5 = SparkMD5.ArrayBuffer.hash(data);
-						return check(baseUrl, md5).then(async ({data: {exists}}) => {
+						return checkFileExists(baseUrl, md5).then(async ({data: {exists}}) => {
 							formData.append('md5', md5);
 							formData.append('extension', renamedFile.extension)
 							formData.append('exists', `${exists}`);
@@ -228,8 +199,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 							return sync(baseUrl, formData).then(() => ({
 								path: renamedFile.path,
 								md5,
-								lastModified,
 								extension: renamedFile.extension,
+								lastModified,
 							}));
 						});
 					});
@@ -271,7 +242,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
 
 	}
 
@@ -291,7 +262,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class Ob2JadeSettingTab extends PluginSettingTab {
 	plugin: Obsidian2JadePlugin;
 
 	constructor(app: App, plugin: Obsidian2JadePlugin) {
@@ -305,16 +276,73 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-		.setName("Setting #1")
-		.setDesc("It's a secret")
+		.setName("Jade Endpoint")
+		.setDesc("Jade Endpoint")
 		.addText((text) =>
 			text
-			.setPlaceholder("Enter your secret")
-			.setValue(this.plugin.settings.mySetting)
+			.setPlaceholder("Enter your Jade endpoint")
+			.setValue(this.plugin.settings.endpoint)
 			.onChange(async (value) => {
-				this.plugin.settings.mySetting = value;
+				this.plugin.settings.endpoint = value;
 				await this.plugin.saveSettings();
 			})
 		);
+
+		new Setting(containerEl)
+		.setName("Sync Vault")
+		.setDesc("Click to sync the entire vault")
+		.addButton(button => {
+			button.setIcon('folder-sync').onClick(async () => {
+				if (!this.plugin.settings.endpoint) {
+					new Notice('Please setup your Jade endpoint');
+					return;
+				}
+				const baseUrl = `${this.plugin.settings.endpoint}/api/sync`;
+
+				const checkHealthResp = await checkHealth(baseUrl)
+				if (!checkHealthResp.data) {
+					new Notice('Jade service is not available');
+					return;
+				}
+
+				const files = this.app.vault.getFiles();
+				const responses: Promise<{
+					path: string;
+					md5: string;
+					extension: string;
+					lastModified: string
+				}>[] = [];
+
+				for (const file of files) {
+					const formData = new FormData();
+					formData.append('path', file.path);
+					formData.append('behavior', Behaviors.CREATED);
+					const resp = this.app.vault.readBinary(file).then(async buff => {
+						const md5 = SparkMD5.ArrayBuffer.hash(buff);
+						return checkFileExists(baseUrl, md5).then(async ({data: {exists}}) => {
+							formData.append('md5', md5);
+							formData.append('extension', file.extension);
+							formData.append('exists', `${exists}`);
+							const lastModified = moment(file.stat.mtime).format('YYYY-MM-DD HH:mm:ss');
+							formData.append('lastModified', lastModified);
+							if (!exists) {
+								formData.append('file', new Blob([buff]));
+							}
+							return sync(baseUrl, formData).then(() => ({
+								path: file.path,
+								md5,
+								lastModified,
+								extension: file.extension,
+							}));
+						})
+					});
+					responses.push(resp);
+				}
+
+				Promise.all(responses).then((details) => {
+					rebuild(baseUrl, {files: details, clearOthers: true});
+				});
+			});
+		});
 	}
 }
