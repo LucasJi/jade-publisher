@@ -19,10 +19,11 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Jade Endpoint")
-			.setDesc("The endpoint of your Jade service")
+			.setDesc(
+				"The endpoint of your Jade service. For example: http://localhost:3000"
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("Example: http://localhost:3000")
 					.setValue(this.plugin.settings.endpoint)
 					.onChange(async (value) => {
 						this.plugin.settings.endpoint = value;
@@ -33,7 +34,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Sync Vault")
 			.setDesc(
-				"Click to sync the entire vault. The synchronization time may take a bit longer"
+				"Click to sync the entire vault to your Jade service. This may take some time"
 			)
 			.addButton((button) => {
 				button.setIcon("folder-sync").onClick(async () => {

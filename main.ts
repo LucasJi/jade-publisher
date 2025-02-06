@@ -123,7 +123,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 		const baseUrl = `${this.settings.endpoint}/api/sync`;
 
 		this.addRibbonIcon(
-			"rocket",
+			"cloud-upload",
 			"Sync your changes to Jade",
 			async (evt: MouseEvent) => {
 				if (!this.settings.endpoint) {
