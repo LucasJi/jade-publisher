@@ -23,6 +23,12 @@ export const sync = async (baseUrl: string, formData: FormData) => {
 	}).then((resp) => resp.json());
 };
 
+export const flush = async (baseUrl: string) => {
+	return fetch(`${baseUrl}/flush`, {
+		method: "GET",
+	}).then((resp) => resp.json());
+};
+
 export const rebuild = async (
 	baseUrl: string,
 	body: {

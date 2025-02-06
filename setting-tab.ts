@@ -1,5 +1,5 @@
 import { type App, moment, Notice, PluginSettingTab, Setting } from "obsidian";
-import { checkHealth, rebuild, sync } from "./api";
+import { checkHealth, flush, rebuild, sync } from "./api";
 import * as SparkMD5 from "spark-md5";
 import type Obsidian2JadePlugin from "./main";
 import { Behaviors } from "./main";
@@ -49,6 +49,8 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 						new Notice("Jade service is not available");
 						return;
 					}
+
+					await flush(baseUrl);
 
 					const files = this.app.vault.getFiles();
 					const responses: Promise<{
