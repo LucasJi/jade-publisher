@@ -275,7 +275,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 						files: details,
 						clearOthers: false,
 					}).then(() => {
-						new Notice("Your vault is synced");
+						new Notice("The synchronization is finished");
 					});
 				});
 				this.settings.modifiedFiles = {};
