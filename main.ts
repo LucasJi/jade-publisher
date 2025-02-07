@@ -12,11 +12,13 @@ import Ob2JadeSettingTab from "./setting-tab";
 interface Obsidian2JadeSettings {
 	endpoint: string;
 	modifiedFiles: Record<string, string>;
+	accessToken: string;
 }
 
 const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	endpoint: "",
 	modifiedFiles: {},
+	accessToken: "",
 };
 
 export enum Behaviors {
@@ -121,6 +123,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 		);
 
 		const baseUrl = `${this.settings.endpoint}/api/sync`;
+		const accessToken = this.settings.accessToken;
 
 		this.addRibbonIcon(
 			"cloud-upload",
@@ -130,7 +133,11 @@ export default class Obsidian2JadePlugin extends Plugin {
 					new Notice("Please setup your Jade endpoint");
 				}
 
-				const checkHealthResp = await checkHealth(baseUrl);
+				if (!accessToken) {
+					new Notice("Please setup your access token");
+				}
+
+				const checkHealthResp = await checkHealth(baseUrl, accessToken);
 				if (!checkHealthResp.data) {
 					new Notice("Jade service is not available");
 					return;
@@ -177,7 +184,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 								).format("YYYY-MM-DD HH:mm:ss");
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
+								return sync(baseUrl, accessToken, formData)
 									.then(() => {
 										new Notice(`${key} is synced`);
 									})
@@ -191,7 +198,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 					} else if (behavior === Behaviors.DELETED) {
 						formData.append("behavior", Behaviors.DELETED);
 
-						await sync(baseUrl, formData);
+						await sync(baseUrl, accessToken, formData);
 						new Notice(`${key} is synced`);
 					} else if (behavior.includes(Behaviors.RENAMED)) {
 						const oldPath = behavior.split(":")[1];
@@ -218,7 +225,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 								).format("YYYY-MM-DD HH:mm:ss");
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
+								return sync(baseUrl, accessToken, formData)
 									.then(() => {
 										new Notice(`${key} is synced`);
 									})
@@ -250,7 +257,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 								).format("YYYY-MM-DD HH:mm:ss");
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
+								return sync(baseUrl, accessToken, formData)
 									.then(() => {
 										new Notice(`${key} is synced`);
 									})
@@ -271,7 +278,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 				}
 
 				Promise.all(responses).then((details) => {
-					rebuild(baseUrl, {
+					rebuild(baseUrl, accessToken, {
 						files: details,
 						clearOthers: false,
 					});
