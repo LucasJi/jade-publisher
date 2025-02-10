@@ -32,8 +32,8 @@ export const sync = async (
 	}).then((resp) => resp.json());
 };
 
-export const flush = async (baseUrl: string, accessToken: string) => {
-	return fetch(`${baseUrl}/flush`, {
+export const resetCaches = async (baseUrl: string, accessToken: string) => {
+	return fetch(`${baseUrl}/reset-caches`, {
 		method: "GET",
 		headers: {
 			authentication: accessToken,

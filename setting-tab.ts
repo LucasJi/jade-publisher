@@ -1,5 +1,5 @@
 import { type App, moment, Notice, PluginSettingTab, Setting } from "obsidian";
-import { checkHealth, flush, rebuild, sync } from "./api";
+import { checkHealth, resetCaches, rebuild, sync } from "./api";
 import * as SparkMD5 from "spark-md5";
 import type Obsidian2JadePlugin from "./main";
 import { NoteStatus } from "./main";
@@ -77,7 +77,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 						return;
 					}
 
-					await flush(baseUrl, accessToken);
+					await resetCaches(baseUrl, accessToken);
 
 					const files = this.app.vault.getFiles();
 					const responses: Promise<{
