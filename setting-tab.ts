@@ -32,6 +32,21 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 		);
 
 		new Setting(containerEl)
+			.setName("Access Token")
+			.setDesc(
+				"The access token is used to protect your Jade sync apis. You can get it from your Jade service environment variables"
+			)
+			.addText((text) => {
+				text.setValue(this.plugin.settings.accessToken).onChange(
+					async (value) => {
+						this.plugin.settings.accessToken = value;
+						await this.plugin.saveSettings();
+					}
+				);
+				return text;
+			});
+
+		new Setting(containerEl)
 		.setName("Sync Vault")
 		.setDesc(
 			"Click to sync the entire vault to your Jade service. This may take some time"
@@ -42,15 +57,24 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 					new Notice("Please setup your Jade endpoint");
 					return;
 				}
-				const baseUrl = `${this.plugin.settings.endpoint}/api/sync`;
+if (!this.plugin.settings.accessToken) {
+						new Notice("Please setup your access token");
+						return;
+					}
 
-				const checkHealthResp = await checkHealth(baseUrl);
+					const baseUrl = `${this.plugin.settings.endpoint}/api/sync`;
+					const accessToken = this.plugin.settings.accessToken;
+
+				const checkHealthResp = await checkHealth(
+						baseUrl,
+						accessToken
+					);
 				if (!checkHealthResp.data) {
 					new Notice("Jade service is not available");
 					return;
 				}
 
-				await flush(baseUrl);
+				await flush(baseUrl, accessToken);
 
 				const files = this.app.vault.getFiles();
 				const responses: Promise<{
@@ -75,7 +99,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 						).format("YYYY-MM-DD HH:mm:ss");
 						formData.append("lastModified", lastModified);
 						formData.append("file", new Blob([buff]));
-						return sync(baseUrl, formData)
+						return sync(baseUrl, accessToken, formData)
 						.then(() => {
 							new Notice(`${file.path} is synced`);
 						})
@@ -94,13 +118,13 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 						"Rebuilding your Jade service, please wait...",
 						0
 					);
-					rebuild(baseUrl, {
+					rebuild(baseUrl, accessToken, {
 						files: details,
 						clearOthers: true,
 					}).then(() => {
 						beginNotice.hide();
 						new Notice(
-							"Your Jade service rebuilds successfully"
+							"Your Jade service rebuilds successfully!"
 						);
 					});
 				});
