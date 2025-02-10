@@ -1,12 +1,6 @@
-import {
-	moment,
-	Notice,
-	Plugin,
-	type TAbstractFile,
-	type TFile,
-} from "obsidian";
+import {moment, Notice, Plugin, type TAbstractFile, type TFile,} from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import { checkHealth, rebuild, sync } from "./api";
+import {checkHealth, rebuild, sync} from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
 
 interface Obsidian2JadeSettings {
@@ -19,7 +13,7 @@ const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
 	modifiedFiles: {},
 };
 
-export enum Behaviors {
+export enum NoteStatus {
 	CREATED = "created",
 	MODIFIED = "modified",
 	DELETED = "deleted",
@@ -37,14 +31,14 @@ export default class Obsidian2JadePlugin extends Plugin {
 				this.app.vault.on("create", (file: TAbstractFile) => {
 					this.settings.modifiedFiles = {
 						...this.settings.modifiedFiles,
-						[file.path]: Behaviors.CREATED,
+						[file.path]: NoteStatus.CREATED,
 					};
 					this.saveSettings();
 				})
 			);
 		});
 
-		// If a file can be modified, it's previous behavior must be `created`, `renamed` or empty.
+		// If a file can be modified, it's previous status must be `created`, `renamed` or empty.
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				const activeFile: TFile | null =
@@ -52,24 +46,24 @@ export default class Obsidian2JadePlugin extends Plugin {
 				if (file === activeFile) {
 					if (
 						this.settings.modifiedFiles[file.path] ===
-						Behaviors.CREATED
+						NoteStatus.CREATED
 					) {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: Behaviors.CREATED,
+							[file.path]: NoteStatus.CREATED,
 						};
 					} else if (
 						this.settings.modifiedFiles[file.path] ===
-						Behaviors.RENAMED
+						NoteStatus.RENAMED
 					) {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: Behaviors.RENAMED,
+							[file.path]: NoteStatus.RENAMED,
 						};
 					} else {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: Behaviors.MODIFIED,
+							[file.path]: NoteStatus.MODIFIED,
 						};
 					}
 
@@ -78,23 +72,23 @@ export default class Obsidian2JadePlugin extends Plugin {
 			})
 		);
 
-		// If a file can be renamed, it's previous behavior must be `created`, `renamed`, `modified` or empty.
+		// If a file can be renamed, it's previous status must be `created`, `renamed`, `modified` or empty.
 		this.registerEvent(
 			this.app.vault.on(
 				"rename",
 				(file: TAbstractFile, oldPath: string) => {
 					if (
 						this.settings.modifiedFiles[oldPath] ===
-						Behaviors.CREATED
+						NoteStatus.CREATED
 					) {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: Behaviors.CREATED,
+							[file.path]: NoteStatus.CREATED,
 						};
 					} else {
 						this.settings.modifiedFiles = {
 							...this.settings.modifiedFiles,
-							[file.path]: `${Behaviors.RENAMED}:${oldPath}`,
+							[file.path]: `${NoteStatus.RENAMED}:${oldPath}`,
 						};
 					}
 					delete this.settings.modifiedFiles[oldPath];
@@ -103,15 +97,15 @@ export default class Obsidian2JadePlugin extends Plugin {
 			)
 		);
 
-		// If a file can be deleted, it's previous behavior must be `created`, `renamed`, `modified` or empty.
+		// If a file can be deleted, it's previous status must be `created`, `renamed`, `modified` or empty.
 		this.registerEvent(
 			this.app.vault.on("delete", (file: TAbstractFile) => {
 				if (
-					this.settings.modifiedFiles[file.path] !== Behaviors.CREATED
+					this.settings.modifiedFiles[file.path] !== NoteStatus.CREATED
 				) {
 					this.settings.modifiedFiles = {
 						...this.settings.modifiedFiles,
-						[file.path]: Behaviors.DELETED,
+						[file.path]: NoteStatus.DELETED,
 					};
 				} else {
 					delete this.settings.modifiedFiles[file.path];
@@ -143,7 +137,7 @@ export default class Obsidian2JadePlugin extends Plugin {
 					lastModified: string;
 				}>[] = [];
 				for (const key of Object.keys(this.settings.modifiedFiles)) {
-					const behavior = this.settings.modifiedFiles[key];
+					const status = this.settings.modifiedFiles[key];
 
 					const formData = new FormData();
 					formData.append("path", key);
@@ -155,8 +149,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 						lastModified: string;
 					}> | null = null;
 
-					if (behavior === Behaviors.CREATED) {
-						formData.append("behavior", Behaviors.CREATED);
+					if (status === NoteStatus.CREATED) {
+						formData.append("status", NoteStatus.CREATED);
 
 						const createdFile = this.app.vault.getFileByPath(key);
 						if (!createdFile) {
@@ -164,39 +158,39 @@ export default class Obsidian2JadePlugin extends Plugin {
 						}
 
 						resp = this.app.vault
-							.readBinary(createdFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									createdFile.extension
-								);
-								const lastModified = moment(
-									createdFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: createdFile.path,
-										md5,
-										lastModified,
-										extension: createdFile.extension,
-									}));
-							});
-					} else if (behavior === Behaviors.DELETED) {
-						formData.append("behavior", Behaviors.DELETED);
+						.readBinary(createdFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								createdFile.extension
+							);
+							const lastModified = moment(
+								createdFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: createdFile.path,
+								md5,
+								lastModified,
+								extension: createdFile.extension,
+							}));
+						});
+					} else if (status === NoteStatus.DELETED) {
+						formData.append("status", NoteStatus.DELETED);
 
 						await sync(baseUrl, formData);
 						new Notice(`${key} is synced`);
-					} else if (behavior.includes(Behaviors.RENAMED)) {
-						const oldPath = behavior.split(":")[1];
+					} else if (status.includes(NoteStatus.RENAMED)) {
+						const oldPath = status.split(":")[1];
 
-						formData.append("behavior", Behaviors.RENAMED);
+						formData.append("status", NoteStatus.RENAMED);
 						formData.append("oldPath", oldPath);
 
 						const renamedFile = this.app.vault.getFileByPath(key);
@@ -205,62 +199,62 @@ export default class Obsidian2JadePlugin extends Plugin {
 						}
 
 						resp = this.app.vault
-							.readBinary(renamedFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									renamedFile.extension
-								);
-								const lastModified = moment(
-									renamedFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: renamedFile.path,
-										md5,
-										extension: renamedFile.extension,
-										lastModified,
-									}));
-							});
-					} else if (behavior === Behaviors.MODIFIED) {
-						formData.append("behavior", Behaviors.MODIFIED);
+						.readBinary(renamedFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								renamedFile.extension
+							);
+							const lastModified = moment(
+								renamedFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: renamedFile.path,
+								md5,
+								extension: renamedFile.extension,
+								lastModified,
+							}));
+						});
+					} else if (status === NoteStatus.MODIFIED) {
+						formData.append("status", NoteStatus.MODIFIED);
 						const modifiedFile = this.app.vault.getFileByPath(key);
 						if (!modifiedFile) {
 							continue;
 						}
 
 						resp = this.app.vault
-							.readBinary(modifiedFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									modifiedFile.extension
-								);
-								const lastModified = moment(
-									modifiedFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: modifiedFile.path,
-										md5,
-										lastModified,
-										extension: modifiedFile.extension,
-									}));
-							});
+						.readBinary(modifiedFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								modifiedFile.extension
+							);
+							const lastModified = moment(
+								modifiedFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: modifiedFile.path,
+								md5,
+								lastModified,
+								extension: modifiedFile.extension,
+							}));
+						});
 					} else {
 						// do nothing
 					}
@@ -285,7 +279,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 		this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
 	}
 
-	onunload() {}
+	onunload() {
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
