@@ -1,7 +1,7 @@
 export const checkHealth = async (
 	baseUrl: string,
 	accessToken: string
-): Promise<{ data: boolean; msg: string }> => {
+): Promise<number> => {
 	const controller = new AbortController();
 	const signal = controller.signal;
 	const timeoutId = setTimeout(() => controller.abort(), 500);
@@ -13,10 +13,8 @@ export const checkHealth = async (
 			authentication: accessToken,
 		},
 	})
-		.then((resp) => resp.json())
-		.catch(() => ({
-			data: false,
-		}))
+		.then((resp) => resp.status)
+		.catch(() => 500)
 		.finally(() => clearTimeout(timeoutId));
 };
 
