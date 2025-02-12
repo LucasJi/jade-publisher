@@ -1,12 +1,6 @@
-import {
-	moment,
-	Notice,
-	Plugin,
-	type TAbstractFile,
-	type TFile,
-} from "obsidian";
+import {moment, Notice, Plugin, type TAbstractFile, type TFile,} from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import { checkHealth, rebuild, sync } from "./api";
+import {checkHealth, rebuild, sync} from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
 
 interface Obsidian2JadeSettings {
@@ -141,10 +135,13 @@ export default class Obsidian2JadePlugin extends Plugin {
 				}
 
 				const healthStatus = await checkHealth(baseUrl, accessToken);
+
 				if (healthStatus === 500) {
 					new Notice("Jade service is not available");
 					return;
-				} else if (healthStatus === 401) {
+				}
+
+				if (healthStatus === 401) {
 					new Notice("Your access token is wrong");
 					return;
 				}
@@ -177,30 +174,30 @@ export default class Obsidian2JadePlugin extends Plugin {
 						}
 
 						resp = this.app.vault
-							.readBinary(createdFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									createdFile.extension
-								);
-								const lastModified = moment(
-									createdFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: createdFile.path,
-										md5,
-										lastModified,
-										extension: createdFile.extension,
-									}));
-							});
+						.readBinary(createdFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								createdFile.extension
+							);
+							const lastModified = moment(
+								createdFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, accessToken, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: createdFile.path,
+								md5,
+								lastModified,
+								extension: createdFile.extension,
+							}));
+						});
 					} else if (status === NoteStatus.DELETED) {
 						formData.append("status", NoteStatus.DELETED);
 
@@ -218,30 +215,30 @@ export default class Obsidian2JadePlugin extends Plugin {
 						}
 
 						resp = this.app.vault
-							.readBinary(renamedFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									renamedFile.extension
-								);
-								const lastModified = moment(
-									renamedFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: renamedFile.path,
-										md5,
-										extension: renamedFile.extension,
-										lastModified,
-									}));
-							});
+						.readBinary(renamedFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								renamedFile.extension
+							);
+							const lastModified = moment(
+								renamedFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, accessToken, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: renamedFile.path,
+								md5,
+								extension: renamedFile.extension,
+								lastModified,
+							}));
+						});
 					} else if (status === NoteStatus.MODIFIED) {
 						formData.append("status", NoteStatus.MODIFIED);
 						const modifiedFile = this.app.vault.getFileByPath(key);
@@ -250,30 +247,30 @@ export default class Obsidian2JadePlugin extends Plugin {
 						}
 
 						resp = this.app.vault
-							.readBinary(modifiedFile)
-							.then(async (data) => {
-								const md5 = SparkMD5.ArrayBuffer.hash(data);
-								formData.append("md5", md5);
-								formData.append(
-									"extension",
-									modifiedFile.extension
-								);
-								const lastModified = moment(
-									modifiedFile.stat.mtime
-								).format("YYYY-MM-DD HH:mm:ss");
-								formData.append("lastModified", lastModified);
-								formData.append("file", new Blob([data]));
-								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
-									.then(() => ({
-										path: modifiedFile.path,
-										md5,
-										lastModified,
-										extension: modifiedFile.extension,
-									}));
-							});
+						.readBinary(modifiedFile)
+						.then(async (data) => {
+							const md5 = SparkMD5.ArrayBuffer.hash(data);
+							formData.append("md5", md5);
+							formData.append(
+								"extension",
+								modifiedFile.extension
+							);
+							const lastModified = moment(
+								modifiedFile.stat.mtime
+							).format("YYYY-MM-DD HH:mm:ss");
+							formData.append("lastModified", lastModified);
+							formData.append("file", new Blob([data]));
+							return sync(baseUrl, accessToken, formData)
+							.then(() => {
+								new Notice(`${key} is synced`);
+							})
+							.then(() => ({
+								path: modifiedFile.path,
+								md5,
+								lastModified,
+								extension: modifiedFile.extension,
+							}));
+						});
 					} else {
 						// do nothing
 					}
@@ -286,7 +283,6 @@ export default class Obsidian2JadePlugin extends Plugin {
 				Promise.all(responses).then((details) => {
 					rebuild(baseUrl, accessToken, {
 						files: details,
-						clearOthers: false,
 					}).then(() => {
 						new Notice("Your changes sync successfully!");
 					});
@@ -300,7 +296,8 @@ export default class Obsidian2JadePlugin extends Plugin {
 		this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
 	}
 
-	onunload() {}
+	onunload() {
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(

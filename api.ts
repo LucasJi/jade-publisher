@@ -13,9 +13,9 @@ export const checkHealth = async (
 			authentication: accessToken,
 		},
 	})
-		.then((resp) => resp.status)
-		.catch(() => 500)
-		.finally(() => clearTimeout(timeoutId));
+	.then((resp) => resp.status)
+	.catch(() => 500)
+	.finally(() => clearTimeout(timeoutId));
 };
 
 export const sync = async (
@@ -32,8 +32,8 @@ export const sync = async (
 	}).then((resp) => resp.json());
 };
 
-export const resetCaches = async (baseUrl: string, accessToken: string) => {
-	return fetch(`${baseUrl}/reset-caches`, {
+export const flush = async (baseUrl: string, accessToken: string) => {
+	return fetch(`${baseUrl}/flush`, {
 		method: "GET",
 		headers: {
 			authentication: accessToken,
@@ -51,7 +51,6 @@ export const rebuild = async (
 			extension: string;
 			lastModified: string;
 		}[];
-		clearOthers: boolean;
 	}
 ) => {
 	return fetch(`${baseUrl}/rebuild`, {
