@@ -13,9 +13,9 @@ export const checkHealth = async (
 			authentication: accessToken,
 		},
 	})
-	.then((resp) => resp.status)
-	.catch(() => 500)
-	.finally(() => clearTimeout(timeoutId));
+		.then((resp) => resp.status)
+		.catch(() => 500)
+		.finally(() => clearTimeout(timeoutId));
 };
 
 export const sync = async (
@@ -50,6 +50,7 @@ export const rebuild = async (
 			md5: string;
 			extension: string;
 			lastModified: string;
+			isDeleted?: string;
 		}[];
 	}
 ) => {
