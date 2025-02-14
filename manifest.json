@@ -5,7 +5,7 @@
 	"minAppVersion": "0.15.0",
 	"description": "Publish your Obsidian vault to Jade website.",
 	"author": "Lucas Ji",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": true
+	"authorUrl": "https://github.com/LucasJi",
+	"fundingUrl": "",
+	"isDesktopOnly": false
 }
