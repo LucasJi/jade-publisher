@@ -1,15 +1,18 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-to-jade-plugin",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "This is a plugin to help publish your vault to public website(created by Jade)",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": [
+		"Obsidian Plugin",
+		"Obsidian Publish Solution"
+	],
+	"author": "LucasJi",
 	"license": "MIT",
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
