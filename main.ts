@@ -9,13 +9,13 @@ import * as SparkMD5 from "spark-md5";
 import { checkHealth, rebuild, sync } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
 
-interface Obsidian2JadeSettings {
+interface JadePublisherSettings {
 	endpoint: string;
 	modifiedFiles: Record<string, string>;
 	accessToken: string;
 }
 
-const DEFAULT_SETTINGS: Obsidian2JadeSettings = {
+const DEFAULT_SETTINGS: JadePublisherSettings = {
 	endpoint: "",
 	modifiedFiles: {},
 	accessToken: "",
@@ -28,8 +28,8 @@ export enum NoteStatus {
 	RENAMED = "renamed",
 }
 
-export default class Obsidian2JadePlugin extends Plugin {
-	settings: Obsidian2JadeSettings;
+export default class JadePublisherPlugin extends Plugin {
+	settings: JadePublisherSettings;
 
 	async onload() {
 		await this.loadSettings();

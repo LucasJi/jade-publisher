@@ -1,13 +1,13 @@
 import {type App, moment, Notice, PluginSettingTab, Setting} from "obsidian";
 import {checkHealth, flush, rebuild, sync} from "./api";
 import * as SparkMD5 from "spark-md5";
-import type Obsidian2JadePlugin from "./main";
+import type JadePublisherPlugin from "./main";
 import {NoteStatus} from "./main";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
-	plugin: Obsidian2JadePlugin;
+	plugin: JadePublisherPlugin;
 
-	constructor(app: App, plugin: Obsidian2JadePlugin) {
+	constructor(app: App, plugin: JadePublisherPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

@@ -1,9 +1,9 @@
 {
-	"id": "Obsidian2Jade",
-	"name": "Obsidian2Jade",
+	"id": "jade-publisher",
+	"name": "Jade Publisher",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Publish your Obsidian vault to Jade website.",
+	"description": "Publish your Obsidian vault to your Jade service.",
 	"author": "Lucas Ji",
 	"authorUrl": "https://github.com/LucasJi",
 	"fundingUrl": "",
