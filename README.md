@@ -5,7 +5,8 @@ with [Jade](https://github.com/LucasJi/Jade)).
 
 ## Download and Install
 
-Search "Jade Publisher" in the official "[community plugin list](https://obsidian.md/plugins)", then
+- Option #1(**recommended**): Manually download assets (`main.js`, `manifest.json`, `styles.css`) from the latest [release](https://github.com/LucasJi/jade-publisher/releases).
+- Option #2(**Not yet released**): Search "Jade Publisher" in the official "[community plugin list](https://obsidian.md/plugins)", then
 install the plugin.
 
 ## Usage
