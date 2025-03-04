@@ -194,9 +194,6 @@ export default class JadePublisherPlugin extends Plugin {
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
 								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
 									.then(() => ({
 										path: createdFile.path,
 										md5,
@@ -207,9 +204,6 @@ export default class JadePublisherPlugin extends Plugin {
 					} else if (status === NoteStatus.DELETED) {
 						formData.append("status", NoteStatus.DELETED);
 						resp = sync(baseUrl, accessToken, formData)
-							.then(() => {
-								new Notice(`${key} is synced`);
-							})
 							.then(() => ({
 								path: key,
 								isDeleted: true,
@@ -243,9 +237,6 @@ export default class JadePublisherPlugin extends Plugin {
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
 								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
 									.then(() => ({
 										path: renamedFile.path,
 										md5,
@@ -275,9 +266,6 @@ export default class JadePublisherPlugin extends Plugin {
 								formData.append("lastModified", lastModified);
 								formData.append("file", new Blob([data]));
 								return sync(baseUrl, accessToken, formData)
-									.then(() => {
-										new Notice(`${key} is synced`);
-									})
 									.then(() => ({
 										path: modifiedFile.path,
 										md5,

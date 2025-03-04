@@ -106,9 +106,6 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 						formData.append("lastModified", lastModified);
 						formData.append("file", new Blob([buff]));
 						return sync(baseUrl, accessToken, formData)
-						.then(() => {
-							new Notice(`${file.path} is synced`);
-						})
 						.then(() => ({
 							path: file.path,
 							md5,
@@ -119,11 +116,12 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 					responses.push(resp);
 				}
 
-				Promise.all(responses).then((details) => {
-					const beginNotice = new Notice(
+				const beginNotice = new Notice(
 						"Rebuilding your Jade service, please wait...",
 						0
-					);
+				);
+
+				Promise.all(responses).then((details) => {
 					rebuild(baseUrl, accessToken, {
 						files: details,
 					}).then(() => {
