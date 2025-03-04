@@ -18,7 +18,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-		.setName("Jade Endpoint")
+		.setName("Jade endpoint")
 		.setDesc(
 			"The endpoint of your Jade service. For example: http://localhost:3000"
 		)
@@ -32,7 +32,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 		);
 
 		new Setting(containerEl)
-		.setName("Access Token")
+		.setName("Access token")
 		.setDesc(
 			"The access token is used to protect your Jade sync apis. You can get it from your Jade service environment variables"
 		)
@@ -47,7 +47,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 		});
 
 		new Setting(containerEl)
-		.setName("Sync Vault")
+		.setName("Sync vault")
 		.setDesc(
 			"Click to sync the entire vault to your Jade service. This may take some time"
 		)
