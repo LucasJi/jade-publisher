@@ -3,7 +3,7 @@
 	"name": "Jade Publisher",
 	"version": "1.0.0",
 	"minAppVersion": "1.8.0",
-	"description": "Publish your Obsidian vault to your Jade service.",
+	"description": "Publish your notes to your Jade service.",
 	"author": "Lucas Ji",
 	"authorUrl": "https://github.com/LucasJi",
 	"isDesktopOnly": true
