@@ -1,10 +1,10 @@
 {
-	"id": "jade-publisher",
-	"name": "Jade Publisher",
-	"version": "2.0.0",
-	"minAppVersion": "1.8.0",
-	"description": "Publish your notes to your Jade service.",
-	"author": "Lucas Ji",
-	"authorUrl": "https://github.com/LucasJi",
-	"isDesktopOnly": true
+  "id": "jade-publisher",
+  "name": "Jade Publisher",
+  "version": "2.0.0",
+  "minAppVersion": "1.8.0",
+  "description": "Sync and Publish your vaults",
+  "author": "Lucas Ji",
+  "authorUrl": "https://github.com/LucasJi",
+  "isDesktopOnly": true
 }
