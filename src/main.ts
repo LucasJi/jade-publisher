@@ -1,6 +1,7 @@
 import { type App, moment, Notice, Plugin, type PluginManifest, type TAbstractFile, type TFile } from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import { checkHealth, rebuild, sync } from "./api";
+import { checkHealth, rebuild, sync, syncDoc } from "./api";
+
 import Ob2JadeSettingTab from "./setting-tab";
 import type { StateData } from "./utils/file-tracker";
 import { FileTracker } from "./utils/file-tracker";
@@ -13,11 +14,11 @@ interface JadePublisherSettings {
 
 const DEFAULT_SETTINGS: JadePublisherSettings = {
   endpoint: "",
+  accessToken: "",
   state: {
     files: {},
     lastSyncTime: 0,
   },
-  accessToken: "",
 };
 
 export enum NoteStatus {
@@ -68,11 +69,32 @@ export default class JadePublisherPlugin extends Plugin {
       })
     );
 
-    this.addRibbonIcon("cloud-upload", "Sync your changes to Jade", async () => {
-      if (!this.settings.endpoint) {
-        new Notice("Please setup your Jade endpoint");
-        return;
+    this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
+      const operations = this.fileTracker.generateSyncOperations();
+      for (const operation of operations) {
+        const file = this.app.vault.getFileByPath(operation.path);
+        if (!file) {
+          continue;
+        }
+        syncDoc({
+          path: operation.path,
+          content: await this.app.vault.read(file),
+          lastPatchId: operation.lastPatchId,
+          operation: operation.operation,
+        }).then(async ({ data = {} }) => {
+          console.log("sync resp", data);
+          const { patchId, content } = data;
+          if (patchId) {
+            this.fileTracker.updateLastPatchId(operation.path, patchId);
+          }
+
+          if (content !== undefined) {
+            await this.app.vault.modify(file, content);
+          }
+        });
       }
+      this.fileTracker.markSynced();
+      this.saveSettings();
     });
 
     // This adds a settings tab so the user can configure various aspects of the plugin

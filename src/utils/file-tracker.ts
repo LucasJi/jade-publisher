@@ -1,14 +1,25 @@
-export type FileState = "created" | "modified" | "deleted" | "renamed";
+export enum FileState {
+  Created = "created",
+  Modified = "modified",
+  Deleted = "deleted",
+  Renamed = "renamed",
+}
+
+export enum SyncOperation {
+  Create = "create",
+  Update = "update",
+  Delete = "delete",
+  Ignore = "ignore",
+}
 
 export interface FileHistoryEntry {
-  type: FileState;
+  state: FileState;
   timestamp: number;
 }
 
 export interface FileRecord {
-  initPath: string;
-  currentPath: string;
   history: FileHistoryEntry[];
+  lastPatchId?: number;
 }
 
 export interface StateData {
@@ -27,18 +38,16 @@ export class FileTracker {
     const fileRecord = this.state.files[filePath];
     if (!fileRecord) {
       this.state.files[filePath] = {
-        initPath: filePath,
-        currentPath: filePath,
         history: [
           {
-            type: "created",
+            state: FileState.Created,
             timestamp: Date.now(),
           },
         ],
       };
     } else {
       this.state.files[filePath].history.push({
-        type: "created",
+        state: FileState.Created,
         timestamp: Date.now(),
       });
     }
@@ -48,18 +57,16 @@ export class FileTracker {
     const fileRecord = this.state.files[filePath];
     if (!fileRecord) {
       this.state.files[filePath] = {
-        initPath: filePath,
-        currentPath: filePath,
         history: [
           {
-            type: "modified",
+            state: FileState.Modified,
             timestamp: Date.now(),
           },
         ],
       };
     } else {
       this.state.files[filePath].history.push({
-        type: "modified",
+        state: FileState.Modified,
         timestamp: Date.now(),
       });
     }
@@ -69,18 +76,16 @@ export class FileTracker {
     const fileRecord = this.state.files[filePath];
     if (!fileRecord) {
       this.state.files[filePath] = {
-        initPath: filePath,
-        currentPath: filePath,
         history: [
           {
-            type: "deleted",
+            state: FileState.Deleted,
             timestamp: Date.now(),
           },
         ],
       };
     } else {
       this.state.files[filePath].history.push({
-        type: "deleted",
+        state: FileState.Deleted,
         timestamp: Date.now(),
       });
     }
@@ -90,7 +95,7 @@ export class FileTracker {
     const oldFileRecord = this.state.files[oldPath];
     if (oldFileRecord) {
       this.state.files[oldPath].history.push({
-        type: "deleted",
+        state: FileState.Deleted,
         timestamp: Date.now(),
       });
     }
@@ -98,20 +103,79 @@ export class FileTracker {
     const newFileRecord = this.state.files[newPath];
     if (newFileRecord) {
       this.state.files[newPath].history.push({
-        type: "created",
+        state: FileState.Created,
         timestamp: Date.now(),
       });
     } else {
       this.state.files[newPath] = {
-        initPath: newPath,
-        currentPath: newPath,
         history: [
           {
-            type: "created",
+            state: FileState.Created,
             timestamp: Date.now(),
           },
         ],
       };
+    }
+  }
+
+  markSynced() {
+    this.state.lastSyncTime = Date.now();
+    for (const filePath in this.state.files) {
+      this.state.files[filePath].history = [];
+    }
+  }
+
+  generateSyncOperations() {
+    console.log("last sync time", this.state.lastSyncTime);
+
+    const operations = [];
+
+    for (const filePath in this.state.files) {
+      const fileRecord = this.state.files[filePath];
+
+      if (!fileRecord) {
+        continue;
+      }
+
+      const history = fileRecord.history;
+
+      if (!history || history.length === 0) {
+        continue;
+      }
+
+      const firstHistory = history[0];
+      const lastHistory = history[history.length - 1];
+
+      if (firstHistory.state === FileState.Created && lastHistory.state === FileState.Deleted) {
+        console.log(`${filePath}:ignore`);
+      } else if (firstHistory.state === FileState.Created && lastHistory.state !== FileState.Deleted) {
+        operations.push({
+          path: filePath,
+          operation: SyncOperation.Create,
+          lastPatchId: fileRecord.lastPatchId,
+        });
+      } else if (firstHistory.state !== FileState.Created && lastHistory.state === FileState.Deleted) {
+        operations.push({
+          path: filePath,
+          operation: SyncOperation.Delete,
+          lastPatchId: fileRecord.lastPatchId,
+        });
+      } else {
+        operations.push({
+          path: filePath,
+          operation: SyncOperation.Update,
+          lastPatchId: fileRecord.lastPatchId,
+        });
+      }
+    }
+
+    return operations;
+  }
+
+  updateLastPatchId(filePath: string, lastPatchId: number) {
+    const fileRecord = this.state.files[filePath];
+    if (fileRecord) {
+      fileRecord.lastPatchId = lastPatchId;
     }
   }
 }
