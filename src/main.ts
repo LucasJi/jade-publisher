@@ -1,7 +1,9 @@
-import { type App, moment, Notice, Plugin, type PluginManifest, type TAbstractFile, type TFile } from "obsidian";
-import * as SparkMD5 from "spark-md5";
-import { checkHealth, rebuild, sync, syncDoc } from "./api";
-
+// @ts-ignore
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import { type Diff, diff_match_patch } from "diff-match-patch";
+import { Plugin, type TAbstractFile, type TFile } from "obsidian";
+import * as Y from "yjs";
+import { syncDoc } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
 import type { StateData } from "./utils/file-tracker";
 import { FileTracker } from "./utils/file-tracker";
@@ -28,6 +30,18 @@ export enum NoteStatus {
   RENAMED = "renamed",
 }
 
+const ydoc = new Y.Doc();
+const ytext = ydoc.getText("textarea");
+const yXmlF = ydoc.getXmlFragment("body");
+
+const provider = new HocuspocusProvider({
+  url: "ws://127.0.0.1:3001/hocuspocus",
+  name: "demo",
+  document: ydoc,
+});
+
+const dmp = new diff_match_patch();
+
 export default class JadePublisherPlugin extends Plugin {
   settings: JadePublisherSettings;
   fileTracker: FileTracker;
@@ -51,6 +65,42 @@ export default class JadePublisherPlugin extends Plugin {
         if (file === activeFile) {
           this.fileTracker.trackModified(file.path);
           this.saveSettings();
+
+          const changed = this.app.vault.cachedRead(activeFile);
+          changed.then((text) => {
+            const currentContent = ytext.toString();
+            const diffs: Diff[] = dmp.diff_main(currentContent, text);
+
+            console.log(yXmlF.toJSON());
+
+            // Optimize the diff
+            dmp.diff_cleanupSemantic(diffs);
+
+            // Initialize the cursor position
+            let cursor = 0;
+
+            // Apply the diffs as updates to the YDoc
+            ydoc.transact(() => {
+              for (const [operation, text] of diffs) {
+                switch (operation) {
+                  case 1: // Insert
+                    console.log(`Inserting "${text}" at position ${cursor}`);
+                    ytext.insert(cursor, text);
+                    cursor += text.length;
+                    break;
+                  case 0: // Equal
+                    console.log(`Keeping "${text}" (length: ${text.length})`);
+                    cursor += text.length;
+                    break;
+                  case -1: // Delete
+                    console.log(`Deleting "${text}" at position ${cursor}`);
+                    ytext.delete(cursor, text.length);
+                    break;
+                }
+                console.log("intermediate", ytext.toString());
+              }
+            });
+          });
         }
       })
     );
