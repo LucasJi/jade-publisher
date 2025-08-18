@@ -1,7 +1,8 @@
 // @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { type Diff, diff_match_patch } from "diff-match-patch";
-import { Plugin, type TAbstractFile, type TFile } from "obsidian";
+import { mark } from "lib0/performance";
+import { FileView, MarkdownView, Notice, Plugin, type TAbstractFile, type TFile } from "obsidian";
 import * as Y from "yjs";
 import { syncDoc } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
@@ -30,14 +31,24 @@ export enum NoteStatus {
   RENAMED = "renamed",
 }
 
-const ydoc = new Y.Doc();
-const ytext = ydoc.getText("textarea");
-const yXmlF = ydoc.getXmlFragment("body");
+const yDoc = new Y.Doc();
+const ytext = yDoc.getText("textarea");
 
 const provider = new HocuspocusProvider({
   url: "ws://127.0.0.1:3001/hocuspocus",
   name: "demo",
-  document: ydoc,
+  document: yDoc,
+});
+
+provider.setAwarenessField("user", {
+  name: "Obsidian",
+  color: "#ffcc00",
+});
+
+// Listen for updates to the states of all users
+// @ts-ignore
+provider.on("awarenessUpdate", ({ states }) => {
+  console.log(states);
 });
 
 const dmp = new diff_match_patch();
@@ -50,6 +61,25 @@ export default class JadePublisherPlugin extends Plugin {
     await this.loadSettings();
     this.loadFileTracker(this.settings.state);
 
+    yDoc.on("afterTransaction", (tr) => {
+      if (tr.local) {
+        console.log("changes from local");
+        return;
+      }
+      // 判断是不是自己发出的 update
+      // const isFromOtherClient = tr.origin !== provider.document.clientID;
+      console.log("changes from remote", provider.document.clientID, tr.origin.document.clientID);
+      tr.changed.forEach((_, type) => {
+        if (type instanceof Y.Text) {
+          for (const [k, t] of yDoc.share) {
+            if (t instanceof Y.Text && type === t) {
+              console.log(`Doc ${k} changed`);
+            }
+          }
+        }
+      });
+    });
+
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.vault.on("create", (file: TAbstractFile) => {
@@ -58,6 +88,31 @@ export default class JadePublisherPlugin extends Plugin {
         })
       );
     });
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", (file) => {
+        console.log(file?.name);
+      })
+    );
+
+    // this.registerEvent(
+    //   this.app.workspace.on("active-leaf-change", (leaf) => {
+    //     // if (!leaf) return;
+    //     // const view = leaf.view;
+    //     // // console.log("view 实例:", view);
+    //     // // console.log("view 类型:", view.getViewType());
+    //     // if (view instanceof MarkdownView) {
+    //     //   const markdownView = view as MarkdownView;
+    //     //   console.log("MarkdownView 实例:", markdownView);
+    //     //   console.log("文件:", markdownView.file?.name);
+    //     // }
+    //
+    //     const file = this.app.workspace.getActiveFile();
+    //     if (file) {
+    //       console.log("切换到了文件:", file.path);
+    //     }
+    //   })
+    // );
 
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
@@ -71,8 +126,6 @@ export default class JadePublisherPlugin extends Plugin {
             const currentContent = ytext.toString();
             const diffs: Diff[] = dmp.diff_main(currentContent, text);
 
-            console.log(yXmlF.toJSON());
-
             // Optimize the diff
             dmp.diff_cleanupSemantic(diffs);
 
@@ -80,26 +133,26 @@ export default class JadePublisherPlugin extends Plugin {
             let cursor = 0;
 
             // Apply the diffs as updates to the YDoc
-            ydoc.transact(() => {
+            yDoc.transact(() => {
               for (const [operation, text] of diffs) {
                 switch (operation) {
                   case 1: // Insert
-                    console.log(`Inserting "${text}" at position ${cursor}`);
+                    // console.log(`Inserting "${text}" at position ${cursor}`);
                     ytext.insert(cursor, text);
                     cursor += text.length;
                     break;
                   case 0: // Equal
-                    console.log(`Keeping "${text}" (length: ${text.length})`);
+                    // console.log(`Keeping "${text}" (length: ${text.length})`);
                     cursor += text.length;
                     break;
                   case -1: // Delete
-                    console.log(`Deleting "${text}" at position ${cursor}`);
+                    // console.log(`Deleting "${text}" at position ${cursor}`);
                     ytext.delete(cursor, text.length);
                     break;
                 }
-                console.log("intermediate", ytext.toString());
+                // console.log("intermediate", ytext.toString());
               }
-            });
+            }, "abc");
           });
         }
       })
