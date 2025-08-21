@@ -52,6 +52,9 @@ export default class JadePublisherPlugin extends Plugin {
       onSynced: ({ state }) => {
         console.log(`Restore doc from server ${state ? "successfully" : "failed"}!`);
       },
+      onOutgoingMessage: () => {
+        console.log("out going message", this.noteRoot.toJSON());
+      },
     });
 
     const indexeddbPersistence = new IndexeddbPersistence(vaultName, this.doc);
@@ -105,7 +108,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.vault.on("create", (file: TAbstractFile) => {
-          this.saveSettings();
+          this.noteRoot.set(file.path, new Y.Text());
         })
       );
     });
@@ -120,6 +123,7 @@ export default class JadePublisherPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
         if (file === activeFile) {
+          console.log("modify");
           this.saveSettings();
 
           const changed = this.app.vault.cachedRead(activeFile);
@@ -169,26 +173,41 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
-        this.saveSettings();
+        const text = this.noteRoot.get(oldPath);
+        if (text) {
+          // If text._pending is null, console will show an error log which can be ignored
+          this.noteRoot.set(file.path, text.clone());
+        } else {
+          this.noteRoot.set(file.path, new Y.Text());
+        }
+
+        this.noteRoot.delete(oldPath);
       })
     );
 
     this.registerEvent(
       this.app.vault.on("delete", (file: TAbstractFile) => {
-        this.saveSettings();
         this.noteRoot.delete(file.path);
       })
     );
 
     this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
-      this.saveSettings();
+      const files = this.app.vault.getFiles();
+      const filePaths = files.map((file) => file.path);
+      for (const key of this.noteRoot.keys()) {
+        if (!filePaths.includes(key)) {
+          this.noteRoot.delete(key);
+        }
+      }
     });
 
     // This adds a settings tab so the user can configure various aspects of the plugin
     this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
   }
 
-  onunload() {}
+  onunload() {
+    console.log("onunload");
+  }
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
