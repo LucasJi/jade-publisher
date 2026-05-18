@@ -1,5 +1,3 @@
-import type { SyncOperation } from "./utils/file-tracker";
-
 export const checkHealth = async (baseUrl: string, accessToken: string): Promise<number> => {
   const controller = new AbortController();
   const signal = controller.signal;
@@ -56,30 +54,5 @@ export const rebuild = async (
       authentication: accessToken,
     },
     body: JSON.stringify(body),
-  }).then((resp) => resp.json());
-};
-
-export const syncDoc = async ({
-  path,
-  content,
-  lastPatchId,
-  operation,
-}: {
-  path: string;
-  content: string;
-  lastPatchId?: number;
-  operation: SyncOperation;
-}) => {
-  return fetch("http://localhost:3000/api/markdown/sync", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path,
-      content,
-      lastPatchId,
-      operation,
-    }),
   }).then((resp) => resp.json());
 };

@@ -5,21 +5,15 @@ import { Plugin, type TAbstractFile, type TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import Ob2JadeSettingTab from "./setting-tab";
-import type { StateData } from "./utils/file-tracker";
 
 interface JadePublisherSettings {
   endpoint: string;
-  state: StateData;
   accessToken: string;
 }
 
 const DEFAULT_SETTINGS: JadePublisherSettings = {
   endpoint: "",
   accessToken: "",
-  state: {
-    files: {},
-    lastSyncTime: 0,
-  },
 };
 
 export enum NoteStatus {
@@ -31,7 +25,7 @@ export enum NoteStatus {
 
 const dmp = new diff_match_patch();
 const LOCAL_ORIGIN = "Obsidian";
-const WEBSOCKET_SERVER_URL = "ws://127.0.0.1:3001/hocuspocus";
+const WEBSOCKET_SERVER_URL = "ws://127.0.0.1:8080/hocuspocus";
 
 export default class JadePublisherPlugin extends Plugin {
   settings: JadePublisherSettings;
