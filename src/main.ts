@@ -29,12 +29,111 @@ const WEBSOCKET_SERVER_URL = "ws://127.0.0.1:8080/hocuspocus";
 
 export default class JadePublisherPlugin extends Plugin {
   settings: JadePublisherSettings;
-  activeProvider: HocuspocusProvider | null;
-  activeIndexeddbPersistence: IndexeddbPersistence | null;
+  vaultName = "";
+  activeProvider: HocuspocusProvider | null = null;
+  activeIndexeddbPersistence: IndexeddbPersistence | null = null;
+  activeFilePath: string | null = null;
+  activeDocName: string | null = null;
+  activeDocUpdateHandler:
+    | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
+    | null = null;
+
+  private destroyActiveDocSession() {
+    if (this.activeProvider && this.activeDocUpdateHandler) {
+      this.activeProvider.document.off("updateV2", this.activeDocUpdateHandler);
+    }
+
+    this.activeProvider?.configuration.websocketProvider.disconnect();
+    this.activeProvider?.destroy();
+    this.activeIndexeddbPersistence?.destroy();
+
+    this.activeProvider = null;
+    this.activeIndexeddbPersistence = null;
+    this.activeFilePath = null;
+    this.activeDocName = null;
+    this.activeDocUpdateHandler = null;
+  }
+
+  private switchActiveDocSession(file: TFile) {
+    const filePath = file.path;
+    const docName = `${this.vaultName}/${filePath}`;
+
+    if (this.activeDocName === docName) {
+      return;
+    }
+
+    this.destroyActiveDocSession();
+
+    const provider = new HocuspocusProvider({
+      url: WEBSOCKET_SERVER_URL,
+      name: docName,
+      onConnect: () => {
+        console.log(`Doc "${docName}" connects to server successfully!`);
+      },
+      onSynced: ({ state }) => {
+        console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
+      },
+      onOutgoingMessage: ({ message }) => {
+        // console.log("outgoing message", this.noteRoot.toJSON(), message);
+      },
+      onDestroy: () => {
+        console.log(`Provider of doc "${docName}" destroyed`);
+      },
+    });
+
+    const indexeddbPersistence = new IndexeddbPersistence(docName, provider.document);
+
+    const updateHandler = (_, origin, doc, transaction) => {
+      console.log(
+        "Receive update, origin:",
+        origin,
+        "doc:",
+        doc,
+        "transaction:",
+        transaction,
+        "current client ID:",
+        this.activeProvider?.document.clientID
+      );
+
+      if (origin === LOCAL_ORIGIN) {
+        console.log("Echo update, ignore");
+        return;
+      }
+
+      if (origin === this.activeIndexeddbPersistence) {
+        console.log("IndexedDB update(used to restore doc), ignore");
+        return;
+      }
+
+      if (origin === this.activeProvider) {
+        console.log("Server update, try to sync");
+        console.log("Changes:", transaction.changed, ", origin:", transaction.origin);
+        const content = doc.getText("content");
+        transaction.changed.forEach((_, type) => {
+          if (content === type) {
+            console.log(`Doc ${filePath} changed, try to sync`);
+            console.log("Latest content:", content);
+            this.app.vault.modify(file, content.toString());
+          }
+        });
+        return;
+      }
+
+      console.log("Unknown origin, ignore");
+    };
+
+    provider.document.on("updateV2", updateHandler);
+
+    this.activeProvider = provider;
+    this.activeIndexeddbPersistence = indexeddbPersistence;
+    this.activeFilePath = filePath;
+    this.activeDocName = docName;
+    this.activeDocUpdateHandler = updateHandler;
+  }
 
   async onload() {
     await this.loadSettings();
-    const vaultName = this.app.vault.getName();
+    this.vaultName = this.app.vault.getName();
 
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
@@ -52,70 +151,7 @@ export default class JadePublisherPlugin extends Plugin {
           return;
         }
 
-        const filePath = file.path;
-        const docName = `${vaultName}/${file.path}`;
-
-        this.activeProvider?.configuration.websocketProvider.disconnect();
-        this.activeProvider?.destroy();
-        this.activeIndexeddbPersistence?.destroy();
-
-        this.activeProvider = new HocuspocusProvider({
-          url: WEBSOCKET_SERVER_URL,
-          name: docName,
-          onConnect: () => {
-            console.log(`Doc "${docName}" connects to server successfully!`);
-          },
-          onSynced: ({ state }) => {
-            console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
-          },
-          onOutgoingMessage: ({ message }) => {
-            // console.log("outgoing message", this.noteRoot.toJSON(), message);
-          },
-          onDestroy: () => {
-            console.log(`Provider of doc "${docName}" destroyed`);
-          },
-        });
-
-        this.activeIndexeddbPersistence = new IndexeddbPersistence(docName, this.activeProvider.document);
-
-        this.activeProvider.document.on("updateV2", (_, origin, doc, transaction) => {
-          console.log(
-            "Receive update, origin:",
-            origin,
-            "doc:",
-            doc,
-            "transaction:",
-            transaction,
-            "current client ID:",
-            this.activeProvider?.document.clientID
-          );
-
-          if (origin === LOCAL_ORIGIN) {
-            console.log("Echo update, ignore");
-            return;
-          }
-
-          if (origin === this.activeIndexeddbPersistence) {
-            console.log("IndexedDB update(used to restore doc), ignore");
-            return;
-          }
-
-          if (origin === this.activeProvider) {
-            console.log("Server update, try to sync");
-            console.log("Changes:", transaction.changed, ", origin:", transaction.origin);
-            const content = doc.getText("content");
-            transaction.changed.forEach((_, type) => {
-              if (content === type) {
-                console.log(`Doc ${filePath} changed, try to sync`);
-                console.log("Latest content:", content);
-                this.app.vault.modify(file, content.toString());
-              }
-            });
-            return;
-          }
-
-          console.log("Unknown origin, ignore");
-        });
+        this.switchActiveDocSession(file);
       })
     );
 
@@ -172,6 +208,18 @@ export default class JadePublisherPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
         console.log(`rename file from ${oldPath} to ${file.path}`);
+
+        if (oldPath !== this.activeFilePath) {
+          return;
+        }
+
+        const activeFile: TFile | null = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          this.destroyActiveDocSession();
+          return;
+        }
+
+        this.switchActiveDocSession(activeFile);
       })
     );
 
@@ -189,6 +237,7 @@ export default class JadePublisherPlugin extends Plugin {
 
   onunload() {
     console.log("onunload");
+    this.destroyActiveDocSession();
   }
 
   async loadSettings() {
