@@ -4,6 +4,7 @@ import { type Diff, diff_match_patch } from "diff-match-patch";
 import { Plugin, type TAbstractFile, type TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
+import { publish } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
 
 interface JadePublisherSettings {
@@ -229,7 +230,12 @@ export default class JadePublisherPlugin extends Plugin {
       })
     );
 
-    this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {});
+    this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
+      const baseUrl = `http://127.0.0.1:8080/api`;
+      publish(baseUrl, this.vaultName).then((resp) => {
+        console.log("Publish Resp", resp);
+      });
+    });
 
     // This adds a settings tab so the user can configure various aspects of the plugin
     this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
