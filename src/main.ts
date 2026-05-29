@@ -25,7 +25,6 @@ export enum NoteStatus {
 }
 
 const dmp = new diff_match_patch();
-const LOCAL_ORIGIN = "Obsidian";
 const WEBSOCKET_SERVER_URL = "ws://127.0.0.1:8080/hocuspocus";
 
 export default class JadePublisherPlugin extends Plugin {
@@ -38,13 +37,20 @@ export default class JadePublisherPlugin extends Plugin {
   activeDocUpdateHandler:
     | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
     | null = null;
+  // Incremented on each session switch, used to ignore stale async callbacks
+  sessionGeneration = 0;
 
   private destroyActiveDocSession() {
+    this.sessionGeneration++;
+
     if (this.activeProvider && this.activeDocUpdateHandler) {
       this.activeProvider.document.off("updateV2", this.activeDocUpdateHandler);
     }
 
-    this.activeProvider?.configuration.websocketProvider.disconnect();
+    // Prevent the old websocket from reconnecting after destroy
+    if (this.activeProvider?.configuration.websocketProvider) {
+      this.activeProvider.configuration.websocketProvider.shouldConnect = false;
+    }
     this.activeProvider?.destroy();
     this.activeIndexeddbPersistence?.destroy();
 
@@ -65,17 +71,19 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.destroyActiveDocSession();
 
+    // Capture the generation at session creation time so stale callbacks are ignored
+    const generation = this.sessionGeneration;
+
     const provider = new HocuspocusProvider({
       url: WEBSOCKET_SERVER_URL,
       name: docName,
       onConnect: () => {
+        if (generation !== this.sessionGeneration) return;
         console.log(`Doc "${docName}" connects to server successfully!`);
       },
       onSynced: ({ state }) => {
+        if (generation !== this.sessionGeneration) return;
         console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
-      },
-      onOutgoingMessage: ({ message }) => {
-        // console.log("outgoing message", this.noteRoot.toJSON(), message);
       },
       onDestroy: () => {
         console.log(`Provider of doc "${docName}" destroyed`);
@@ -84,28 +92,21 @@ export default class JadePublisherPlugin extends Plugin {
 
     const indexeddbPersistence = new IndexeddbPersistence(docName, provider.document);
 
-    const updateHandler = (_, origin, doc, transaction) => {
-      console.log(
-        "Receive update, origin:",
-        origin,
-        "doc:",
-        doc,
-        "transaction:",
-        transaction,
-        "current client ID:",
-        this.activeProvider?.document.clientID
-      );
+    const updateHandler = (_: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => {
+      if (generation !== this.sessionGeneration) return;
 
-      if (origin === LOCAL_ORIGIN) {
-        console.log("Echo update, ignore");
+      // null/undefined origin = local changes applied by this plugin's modify handler
+      if (origin === null || origin === undefined) {
+        console.log("Local update, provider will sync to server");
         return;
       }
 
-      if (origin === this.activeIndexeddbPersistence) {
-        console.log("IndexedDB update(used to restore doc), ignore");
+      if (origin === indexeddbPersistence) {
+        console.log("IndexedDB update (used to restore doc), ignore");
         return;
       }
 
+      // Server update (applied by the HocuspocusProvider): apply to the local file
       if (origin === this.activeProvider) {
         console.log("Server update, try to sync");
         console.log("Changes:", transaction.changed, ", origin:", transaction.origin);
@@ -160,7 +161,11 @@ export default class JadePublisherPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
         if (file === activeFile) {
-          if (!this.activeProvider) {
+          // Capture provider reference before async operation to prevent race conditions
+          const capturedProvider = this.activeProvider;
+          const capturedFilePath = this.activeFilePath;
+
+          if (!capturedProvider) {
             console.log(`Active hocuspocus provider of ${file.path} not found, skip syncing`);
             return;
           }
@@ -168,11 +173,17 @@ export default class JadePublisherPlugin extends Plugin {
           const changed = this.app.vault.cachedRead(activeFile);
 
           changed.then((text) => {
-            const doc: Y.Doc = this.activeProvider.document;
+            // Verify the provider hasn't changed during the async read
+            if (this.activeProvider !== capturedProvider || this.activeFilePath !== capturedFilePath) {
+              console.log(`Provider switched during async read for ${file.path}, skip syncing`);
+              return;
+            }
+
+            const doc: Y.Doc = capturedProvider.document;
             const content = doc.getText("content");
 
-            const origin = content.toString();
-            const diffs: Diff[] = dmp.diff_main(origin, text);
+            const oldContent = content.toString();
+            const diffs: Diff[] = dmp.diff_main(oldContent, text);
 
             // Optimize the diff
             dmp.diff_cleanupSemantic(diffs);
@@ -181,26 +192,23 @@ export default class JadePublisherPlugin extends Plugin {
             let cursor = 0;
 
             // Apply the diffs as updates to the YDoc
+            // Use null origin so the Hocuspocus Provider treats this as a local change to sync
             doc.transact(() => {
-              for (const [operation, text] of diffs) {
+              for (const [operation, diffText] of diffs) {
                 switch (operation) {
                   case 1: // Insert
-                    // console.log(`Inserting "${text}" at position ${cursor}`);
-                    content.insert(cursor, text);
-                    cursor += text.length;
+                    content.insert(cursor, diffText);
+                    cursor += diffText.length;
                     break;
                   case 0: // Equal
-                    // console.log(`Keeping "${text}" (length: ${text.length})`);
-                    cursor += text.length;
+                    cursor += diffText.length;
                     break;
                   case -1: // Delete
-                    // console.log(`Deleting "${text}" at position ${cursor}`);
-                    content.delete(cursor, text.length);
+                    content.delete(cursor, diffText.length);
                     break;
                 }
-                // console.log("intermediate", ytext.toString());
               }
-            }, LOCAL_ORIGIN);
+            }, null);
           });
         }
       })

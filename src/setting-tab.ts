@@ -1,6 +1,6 @@
 import { type App, moment, Notice, PluginSettingTab, Setting } from "obsidian";
 import * as SparkMD5 from "spark-md5";
-import { checkHealth, flush, rebuild, sync } from "./api";
+import { flush, rebuild, sync } from "./api";
 import type JadePublisherPlugin from "./main";
 import { NoteStatus } from "./main";
 
@@ -30,7 +30,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Access token")
       .setDesc(
-        "The access token is used to protect your Jade sync apis. You can get it from your Jade service environment variables"
+        "The access token is used to protect your Jade APIs. You can generate it from your Jade admin dashboard."
       )
       .addText((text) => {
         text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
@@ -42,32 +42,20 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Sync vault")
-      .setDesc("Click to sync the entire vault to your Jade service. This may take some time")
+      .setDesc("Click to sync the entire vault to your Jade service. This may take a while.")
       .addButton((button) => {
         button.setIcon("folder-sync").onClick(async () => {
           if (!this.plugin.settings.endpoint) {
-            new Notice("Please setup your Jade endpoint");
+            new Notice("Endpoint is required");
             return;
           }
           if (!this.plugin.settings.accessToken) {
-            new Notice("Please setup your access token");
+            new Notice("Access token is required");
             return;
           }
 
           const baseUrl = `${this.plugin.settings.endpoint}/api/sync`;
           const accessToken = this.plugin.settings.accessToken;
-
-          const healthStatus = await checkHealth(baseUrl, accessToken);
-
-          if (healthStatus === 500) {
-            new Notice("Jade service is not available");
-            return;
-          }
-
-          if (healthStatus === 401) {
-            new Notice("Your access token is wrong");
-            return;
-          }
 
           await flush(baseUrl, accessToken);
 
