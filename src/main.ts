@@ -239,7 +239,7 @@ export default class JadePublisherPlugin extends Plugin {
     );
 
     this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
-      const baseUrl = `http://127.0.0.1:8080/api`;
+      const baseUrl = `${this.settings.endpoint}/api`;
       publish(baseUrl, this.vaultName).then((resp) => {
         console.log("Publish Resp", resp);
       });
