@@ -1,7 +1,7 @@
 // @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { type Diff, diff_match_patch } from "diff-match-patch";
-import { Plugin, type TAbstractFile, type TFile } from "obsidian";
+import { Plugin, TFile, type TAbstractFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { publish } from "./api";
@@ -39,6 +39,10 @@ export default class JadePublisherPlugin extends Plugin {
     | null = null;
   // Incremented on each session switch, used to ignore stale async callbacks
   sessionGeneration = 0;
+
+  private isMarkdownFile(file: TAbstractFile | null): boolean {
+    return file instanceof TFile && file.extension === "md";
+  }
 
   private destroyActiveDocSession() {
     this.sessionGeneration++;
@@ -153,12 +157,20 @@ export default class JadePublisherPlugin extends Plugin {
           return;
         }
 
-        this.switchActiveDocSession(file);
+        if (this.isMarkdownFile(file)) {
+          this.switchActiveDocSession(file);
+        } else {
+          this.destroyActiveDocSession();
+        }
       })
     );
 
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
+        if (!this.isMarkdownFile(file)) {
+          return;
+        }
+
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
         if (file === activeFile) {
           // Capture provider reference before async operation to prevent race conditions
@@ -223,7 +235,7 @@ export default class JadePublisherPlugin extends Plugin {
         }
 
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
-        if (!activeFile) {
+        if (!activeFile || !this.isMarkdownFile(activeFile)) {
           this.destroyActiveDocSession();
           return;
         }
