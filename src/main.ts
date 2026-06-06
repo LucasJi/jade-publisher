@@ -1,8 +1,8 @@
-import { Plugin, TFile, type TAbstractFile, Notice } from "obsidian";
+import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
 import { publish } from "./api";
-import Ob2JadeSettingTab from "./setting-tab";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
+import Ob2JadeSettingTab from "./setting-tab";
 import { SyncHandler } from "./sync-handler";
 import type { JadePublisherSettings } from "./types";
 

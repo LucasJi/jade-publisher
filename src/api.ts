@@ -37,7 +37,7 @@ async function fetchWithRetry(
       console.warn(`Request failed (attempt ${attempt + 1}/${maxRetries + 1}): ${lastError.message}`);
 
       if (attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 1000;
+        const delay = 2 ** attempt * 1000;
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

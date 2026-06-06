@@ -25,7 +25,7 @@
       "recommended": true,
       "correctness": {
         "noUnusedImports": {
-          "level": "warn",
+          "level": "error",
           "options": {}
         }
       }

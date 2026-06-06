@@ -1,7 +1,7 @@
 // src/session-manager.ts
 // @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { type TFile } from "obsidian";
+import type { TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { WEBSOCKET_PATH } from "./constants";
@@ -11,7 +11,9 @@ export class SessionManager {
   private activeIndexeddbPersistence: IndexeddbPersistence | null = null;
   private activeFilePath: string | null = null;
   private activeDocName: string | null = null;
-  private activeDocUpdateHandler: ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void) | null = null;
+  private activeDocUpdateHandler:
+    | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
+    | null = null;
   private sessionGeneration = 0;
 
   constructor(

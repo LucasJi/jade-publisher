@@ -1,5 +1,5 @@
 import type { Diff } from "diff-match-patch";
-import { TFile, type TAbstractFile } from "obsidian";
+import { type TAbstractFile, TFile } from "obsidian";
 import type * as Y from "yjs";
 import { dmp } from "./constants";
 import type JadePublisherPlugin from "./main";
