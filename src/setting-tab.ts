@@ -48,11 +48,17 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           const files = this.app.vault.getFiles();
 
           try {
-            for (const file of files) {
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
               const content = await this.app.vault.readBinary(file);
               const mimeType = file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
               const blob = new Blob([content], { type: mimeType });
               formData.append("files", blob, encodeURIComponent(file.path));
+
+              // Update progress every 5 files to avoid excessive DOM updates
+              if ((i + 1) % 5 === 0 || i === files.length - 1) {
+                notice.setMessage(`Syncing vault... (${i + 1}/${files.length} files)`);
+              }
             }
 
             const response = await fetch(`${baseUrl}/vaults/${this.app.vault.getName()}/sync`, {
