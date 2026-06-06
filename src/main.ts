@@ -185,42 +185,48 @@ export default class JadePublisherPlugin extends Plugin {
           const changed = this.app.vault.cachedRead(activeFile);
 
           changed.then((text) => {
-            // Verify the provider hasn't changed during the async read
-            if (this.activeProvider !== capturedProvider || this.activeFilePath !== capturedFilePath) {
-              console.log(`Provider switched during async read for ${file.path}, skip syncing`);
-              return;
-            }
-
-            const doc: Y.Doc = capturedProvider.document;
-            const content = doc.getText("content");
-
-            const oldContent = content.toString();
-            const diffs: Diff[] = dmp.diff_main(oldContent, text);
-
-            // Optimize the diff
-            dmp.diff_cleanupSemantic(diffs);
-
-            // Initialize the cursor position
-            let cursor = 0;
-
-            // Apply the diffs as updates to the YDoc
-            // Use null origin so the Hocuspocus Provider treats this as a local change to sync
-            doc.transact(() => {
-              for (const [operation, diffText] of diffs) {
-                switch (operation) {
-                  case 1: // Insert
-                    content.insert(cursor, diffText);
-                    cursor += diffText.length;
-                    break;
-                  case 0: // Equal
-                    cursor += diffText.length;
-                    break;
-                  case -1: // Delete
-                    content.delete(cursor, diffText.length);
-                    break;
-                }
+            try {
+              // Verify the provider hasn't changed during the async read
+              if (this.activeProvider !== capturedProvider || this.activeFilePath !== capturedFilePath) {
+                console.log(`Provider switched during async read for ${file.path}, skip syncing`);
+                return;
               }
-            }, null);
+
+              const doc: Y.Doc = capturedProvider.document;
+              const content = doc.getText("content");
+
+              const oldContent = content.toString();
+              const diffs: Diff[] = dmp.diff_main(oldContent, text);
+
+              // Optimize the diff
+              dmp.diff_cleanupSemantic(diffs);
+
+              // Initialize the cursor position
+              let cursor = 0;
+
+              // Apply the diffs as updates to the YDoc
+              // Use null origin so the Hocuspocus Provider treats this as a local change to sync
+              doc.transact(() => {
+                for (const [operation, diffText] of diffs) {
+                  switch (operation) {
+                    case 1: // Insert
+                      content.insert(cursor, diffText);
+                      cursor += diffText.length;
+                      break;
+                    case 0: // Equal
+                      cursor += diffText.length;
+                      break;
+                    case -1: // Delete
+                      content.delete(cursor, diffText.length);
+                      break;
+                  }
+                }
+              }, null);
+            } catch (error) {
+              console.error(`Failed to sync modifications for ${file.path}:`, error);
+            }
+          }).catch((error) => {
+            console.error(`Failed to read file ${file.path}:`, error);
           });
         }
       })
