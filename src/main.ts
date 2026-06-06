@@ -7,7 +7,7 @@ import { SyncHandler } from "./sync-handler";
 import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
-  settings: JadePublisherSettings;
+  settings!: JadePublisherSettings;
   vaultName = "";
   private sessionManager!: SessionManager;
 

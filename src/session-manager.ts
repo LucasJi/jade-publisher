@@ -3,7 +3,7 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import type { TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 import { WEBSOCKET_PATH } from "./constants";
 
 export class SessionManager {
@@ -105,7 +105,7 @@ export class SessionManager {
         console.log("Changes:", transaction.changed, ", origin:", transaction.origin);
         const content = doc.getText("content");
         transaction.changed.forEach((_, type) => {
-          if (content === type) {
+          if (type instanceof Y.Text) {
             console.log(`Doc ${filePath} changed, try to sync`);
             console.log("Latest content:", content);
             this.onServerUpdate(file, doc, content, filePath);
