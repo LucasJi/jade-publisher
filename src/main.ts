@@ -6,7 +6,7 @@ import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { publish } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
-import { DEFAULT_SETTINGS, dmp, WEBSOCKET_PATH, NoteStatus } from "./constants";
+import { DEFAULT_SETTINGS, dmp, WEBSOCKET_PATH } from "./constants";
 import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
@@ -61,7 +61,7 @@ export default class JadePublisherPlugin extends Plugin {
     const generation = this.sessionGeneration;
 
     const provider = new HocuspocusProvider({
-      url: `${this.settings.endpoint.replace(/^http/, "ws")}${WEBSOCKET_PATH}`,
+      url: `${this.settings.endpoint.replace(/^http/, "ws").replace(/\/+$/, "")}${WEBSOCKET_PATH}`,
       name: docName,
       onConnect: () => {
         if (generation !== this.sessionGeneration) return;
