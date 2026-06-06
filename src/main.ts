@@ -21,6 +21,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
+      this.settings.accessToken,
       (file, _doc, content, _filePath) => {
         this.app.vault.modify(file, content.toString());
       }

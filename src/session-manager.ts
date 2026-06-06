@@ -19,6 +19,7 @@ export class SessionManager {
   constructor(
     private vaultName: string,
     private endpoint: string,
+    private accessToken: string,
     private onServerUpdate: (file: TFile, doc: Y.Doc, content: Y.Text, filePath: string) => void
   ) {}
 
@@ -70,6 +71,7 @@ export class SessionManager {
     const provider = new HocuspocusProvider({
       url: wsUrl,
       name: docName,
+      token: this.accessToken,
       onConnect: () => {
         if (generation !== this.sessionGeneration) return;
         console.log(`Doc "${docName}" connects to server successfully!`);
