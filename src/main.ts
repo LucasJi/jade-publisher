@@ -1,127 +1,31 @@
-// @ts-ignore
-import { HocuspocusProvider } from "@hocuspocus/provider";
 import type { Diff } from "diff-match-patch";
 import { Plugin, TFile, type TAbstractFile, Notice } from "obsidian";
-import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { publish } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
-import { DEFAULT_SETTINGS, dmp, WEBSOCKET_PATH } from "./constants";
+import { DEFAULT_SETTINGS, dmp } from "./constants";
+import { SessionManager } from "./session-manager";
 import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
   settings: JadePublisherSettings;
   vaultName = "";
-  activeProvider: HocuspocusProvider | null = null;
-  activeIndexeddbPersistence: IndexeddbPersistence | null = null;
-  activeFilePath: string | null = null;
-  activeDocName: string | null = null;
-  activeDocUpdateHandler:
-    | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
-    | null = null;
-  // Incremented on each session switch, used to ignore stale async callbacks
-  sessionGeneration = 0;
+  private sessionManager!: SessionManager;
 
   private isMarkdownFile(file: TAbstractFile | null): boolean {
     return file instanceof TFile && file.extension === "md";
   }
 
-  private destroyActiveDocSession() {
-    this.sessionGeneration++;
-
-    if (this.activeProvider && this.activeDocUpdateHandler) {
-      this.activeProvider.document.off("updateV2", this.activeDocUpdateHandler);
-    }
-
-    // Prevent the old websocket from reconnecting after destroy
-    if (this.activeProvider?.configuration.websocketProvider) {
-      this.activeProvider.configuration.websocketProvider.shouldConnect = false;
-    }
-    this.activeProvider?.destroy();
-    this.activeIndexeddbPersistence?.destroy();
-
-    this.activeProvider = null;
-    this.activeIndexeddbPersistence = null;
-    this.activeFilePath = null;
-    this.activeDocName = null;
-    this.activeDocUpdateHandler = null;
-  }
-
-  private switchActiveDocSession(file: TFile) {
-    const filePath = file.path;
-    const docName = `${this.vaultName}/${filePath}`;
-
-    if (this.activeDocName === docName) {
-      return;
-    }
-
-    this.destroyActiveDocSession();
-
-    // Capture the generation at session creation time so stale callbacks are ignored
-    const generation = this.sessionGeneration;
-
-    const provider = new HocuspocusProvider({
-      url: `${this.settings.endpoint.replace(/^http/, "ws").replace(/\/+$/, "")}${WEBSOCKET_PATH}`,
-      name: docName,
-      onConnect: () => {
-        if (generation !== this.sessionGeneration) return;
-        console.log(`Doc "${docName}" connects to server successfully!`);
-      },
-      onSynced: ({ state }) => {
-        if (generation !== this.sessionGeneration) return;
-        console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
-      },
-      onDestroy: () => {
-        console.log(`Provider of doc "${docName}" destroyed`);
-      },
-    });
-
-    const indexeddbPersistence = new IndexeddbPersistence(docName, provider.document);
-
-    const updateHandler = (_: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => {
-      if (generation !== this.sessionGeneration) return;
-
-      // null/undefined origin = local changes applied by this plugin's modify handler
-      if (origin === null || origin === undefined) {
-        console.log("Local update, provider will sync to server");
-        return;
-      }
-
-      if (origin === indexeddbPersistence) {
-        console.log("IndexedDB update (used to restore doc), ignore");
-        return;
-      }
-
-      // Server update (applied by the HocuspocusProvider): apply to the local file
-      if (origin === this.activeProvider) {
-        console.log("Server update, try to sync");
-        console.log("Changes:", transaction.changed, ", origin:", transaction.origin);
-        const content = doc.getText("content");
-        transaction.changed.forEach((_, type) => {
-          if (content === type) {
-            console.log(`Doc ${filePath} changed, try to sync`);
-            console.log("Latest content:", content);
-            this.app.vault.modify(file, content.toString());
-          }
-        });
-        return;
-      }
-
-      console.log("Unknown origin, ignore");
-    };
-
-    provider.document.on("updateV2", updateHandler);
-
-    this.activeProvider = provider;
-    this.activeIndexeddbPersistence = indexeddbPersistence;
-    this.activeFilePath = filePath;
-    this.activeDocName = docName;
-    this.activeDocUpdateHandler = updateHandler;
-  }
-
   async onload() {
     await this.loadSettings();
     this.vaultName = this.app.vault.getName();
+    this.sessionManager = new SessionManager(
+      this.vaultName,
+      this.settings.endpoint,
+      (file, _doc, content, _filePath) => {
+        this.app.vault.modify(file, content.toString());
+      }
+    );
 
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
@@ -140,9 +44,9 @@ export default class JadePublisherPlugin extends Plugin {
         }
 
         if (this.isMarkdownFile(file)) {
-          this.switchActiveDocSession(file);
+          this.sessionManager.switchTo(file);
         } else {
-          this.destroyActiveDocSession();
+          this.sessionManager.destroy();
         }
       })
     );
@@ -156,8 +60,8 @@ export default class JadePublisherPlugin extends Plugin {
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
         if (file === activeFile) {
           // Capture provider reference before async operation to prevent race conditions
-          const capturedProvider = this.activeProvider;
-          const capturedFilePath = this.activeFilePath;
+          const capturedProvider = this.sessionManager.provider;
+          const capturedFilePath = this.sessionManager.filePath;
 
           if (!capturedProvider) {
             console.log(`Active hocuspocus provider of ${file.path} not found, skip syncing`);
@@ -169,7 +73,7 @@ export default class JadePublisherPlugin extends Plugin {
           changed.then((text) => {
             try {
               // Verify the provider hasn't changed during the async read
-              if (this.activeProvider !== capturedProvider || this.activeFilePath !== capturedFilePath) {
+              if (this.sessionManager.provider !== capturedProvider || this.sessionManager.filePath !== capturedFilePath) {
                 console.log(`Provider switched during async read for ${file.path}, skip syncing`);
                 return;
               }
@@ -218,17 +122,17 @@ export default class JadePublisherPlugin extends Plugin {
       this.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
         console.log(`rename file from ${oldPath} to ${file.path}`);
 
-        if (oldPath !== this.activeFilePath) {
+        if (oldPath !== this.sessionManager.filePath) {
           return;
         }
 
         const activeFile: TFile | null = this.app.workspace.getActiveFile();
         if (!activeFile || !this.isMarkdownFile(activeFile)) {
-          this.destroyActiveDocSession();
+          this.sessionManager.destroy();
           return;
         }
 
-        this.switchActiveDocSession(activeFile);
+        this.sessionManager.switchTo(activeFile);
       })
     );
 
@@ -256,7 +160,7 @@ export default class JadePublisherPlugin extends Plugin {
 
   onunload() {
     console.log("onunload");
-    this.destroyActiveDocSession();
+    this.sessionManager.destroy();
   }
 
   async loadSettings() {
