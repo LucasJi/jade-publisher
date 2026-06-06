@@ -1,31 +1,13 @@
 // @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { type Diff, diff_match_patch } from "diff-match-patch";
+import type { Diff } from "diff-match-patch";
 import { Plugin, TFile, type TAbstractFile, Notice } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { publish } from "./api";
 import Ob2JadeSettingTab from "./setting-tab";
-
-interface JadePublisherSettings {
-  endpoint: string;
-  accessToken: string;
-}
-
-const DEFAULT_SETTINGS: JadePublisherSettings = {
-  endpoint: "",
-  accessToken: "",
-};
-
-export enum NoteStatus {
-  CREATED = "created",
-  MODIFIED = "modified",
-  DELETED = "deleted",
-  RENAMED = "renamed",
-}
-
-const dmp = new diff_match_patch();
-const WEBSOCKET_SERVER_URL = "ws://127.0.0.1:8080/hocuspocus";
+import { DEFAULT_SETTINGS, dmp, WEBSOCKET_PATH, NoteStatus } from "./constants";
+import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
   settings: JadePublisherSettings;
@@ -79,7 +61,7 @@ export default class JadePublisherPlugin extends Plugin {
     const generation = this.sessionGeneration;
 
     const provider = new HocuspocusProvider({
-      url: WEBSOCKET_SERVER_URL,
+      url: `${this.settings.endpoint.replace(/^http/, "ws")}${WEBSOCKET_PATH}`,
       name: docName,
       onConnect: () => {
         if (generation !== this.sessionGeneration) return;
