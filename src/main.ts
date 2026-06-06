@@ -1,7 +1,7 @@
 // @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { type Diff, diff_match_patch } from "diff-match-patch";
-import { Plugin, TFile, type TAbstractFile } from "obsidian";
+import { Plugin, TFile, type TAbstractFile, Notice } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type * as Y from "yjs";
 import { publish } from "./api";
@@ -252,9 +252,14 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
       const baseUrl = `${this.settings.endpoint}/api`;
-      publish(baseUrl, this.vaultName).then((resp) => {
+      try {
+        const resp = await publish(baseUrl, this.vaultName);
         console.log("Publish Resp", resp);
-      });
+        new Notice("✅ Synced to Jade successfully");
+      } catch (error) {
+        console.error("Publish failed:", error);
+        new Notice(`❌ Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     });
 
     // This adds a settings tab so the user can configure various aspects of the plugin
