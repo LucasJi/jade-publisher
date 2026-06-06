@@ -59,3 +59,36 @@ export const publish = async (baseUrl: string, vault: string) => {
 
   return response.json();
 };
+
+export const deleteNote = async (baseUrl: string, vault: string, filePath: string) => {
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${vault}/notes/${encodeURIComponent(filePath)}`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Delete failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const renameNote = async (baseUrl: string, vault: string, oldPath: string, newPath: string) => {
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${vault}/notes/${encodeURIComponent(oldPath)}/rename`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPath }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Rename failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
