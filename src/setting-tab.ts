@@ -1,8 +1,5 @@
-import { type App, moment, Notice, PluginSettingTab, Setting } from "obsidian";
-import * as SparkMD5 from "spark-md5";
-import { sync } from "./api";
+import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type JadePublisherPlugin from "./main";
-import { NoteStatus } from "./main";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
   plugin: JadePublisherPlugin;
