@@ -10,11 +10,10 @@ async function fetchWithTimeout(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal,
     });
-    return response;
   } finally {
     clearTimeout(timer);
   }
@@ -30,8 +29,7 @@ async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetchWithTimeout(url, options, timeoutMs);
-      return response;
+      return await fetchWithTimeout(url, options, timeoutMs);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`Request failed (attempt ${attempt + 1}/${maxRetries + 1}): ${lastError.message}`);
@@ -82,6 +80,62 @@ export const renameNote = async (baseUrl: string, vault: string, oldPath: string
 
   if (!response.ok) {
     throw new Error(`Rename failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const startSyncTask = async (baseUrl: string, vault: string) => {
+  const response = await fetchWithRetry(`${baseUrl}/vaults/${encodeURIComponent(vault)}/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Start sync task failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const uploadSyncFile = async (
+  baseUrl: string,
+  vault: string,
+  taskId: string,
+  filePath: string,
+  content: ArrayBuffer,
+  mimeType: string
+) => {
+  const formData = new FormData();
+  const blob = new Blob([content], { type: mimeType });
+  formData.append("file", blob, encodeURIComponent(filePath));
+
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${encodeURIComponent(vault)}/sync/${encodeURIComponent(taskId)}`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Upload sync file failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const completeSyncTask = async (baseUrl: string, vault: string, taskId: string) => {
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${encodeURIComponent(vault)}/sync/${encodeURIComponent(taskId)}/complete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Complete sync task failed: ${response.status} ${response.statusText}`);
   }
 
   return response.json();

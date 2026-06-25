@@ -1,5 +1,6 @@
 import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type JadePublisherPlugin from "./main";
+import { completeSyncTask, startSyncTask, uploadSyncFile } from "./api";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
   plugin: JadePublisherPlugin;
@@ -43,39 +44,48 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       .addButton((button) => {
         button.setIcon("folder-sync").onClick(async () => {
           const baseUrl = `${this.plugin.settings.endpoint}/api`;
-          const notice = new Notice("Syncing vault...", 0);
-          const formData = new FormData();
+          const vault = this.app.vault.getName();
           const files = this.app.vault.getFiles();
+          const notice = new Notice("Syncing vault...", 0);
+          let notesUploaded = 0;
+          let attachmentsUploaded = 0;
 
           try {
+            // Step 1: Create sync task
+            const startResult = await startSyncTask(baseUrl, vault);
+            const taskId = startResult.data?.taskId as string;
+            if (!taskId) {
+              throw new Error("Failed to create sync task");
+            }
+
+            // Step 2: Upload files one by one
             for (let i = 0; i < files.length; i++) {
               const file = files[i];
               const content = await this.app.vault.readBinary(file);
               const mimeType = file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
-              const blob = new Blob([content], { type: mimeType });
-              formData.append("files", blob, encodeURIComponent(file.path));
 
-              // Update progress every 5 files to avoid excessive DOM updates
+              await uploadSyncFile(baseUrl, vault, taskId, file.path, content, mimeType);
+
+              if (file.extension === "md") {
+                notesUploaded++;
+              } else {
+                attachmentsUploaded++;
+              }
+
               if ((i + 1) % 5 === 0 || i === files.length - 1) {
                 notice.setMessage(`Syncing vault... (${i + 1}/${files.length} files)`);
               }
             }
 
-            const response = await fetch(`${baseUrl}/vaults/${this.app.vault.getName()}/sync`, {
-              method: "POST",
-              body: formData,
-            });
-
-            const result = await response.json();
+            // Step 3: Complete sync task
+            const completeResult = await completeSyncTask(baseUrl, vault, taskId);
+            const deletedCount = completeResult.data?.deletedCount as number;
             notice.hide();
 
-            if (response.ok) {
-              new Notice(
-                `✅ Sync done — ${result.data.notes.upserted} notes, ${result.data.attachments.uploaded} attachments`
-              );
-            } else {
-              new Notice(`❌ Sync failed: ${response.status} ${response.statusText}`);
-            }
+            new Notice(
+              `✅ Synced ${notesUploaded} notes, ${attachmentsUploaded} attachments` +
+                (deletedCount ? `, removed ${deletedCount} old notes` : ""),
+            );
           } catch (error) {
             notice.hide();
             console.error("Vault sync failed:", error);
