@@ -1,6 +1,27 @@
 const DEFAULT_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 3;
 
+let getToken: () => Promise<string | null> = async () => null;
+
+export const setTokenProvider = (provider: () => Promise<string | null>) => {
+  getToken = provider;
+};
+
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const token = await getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
+const getUploadAuthHeaders = async (): Promise<Record<string, string>> => {
+  const token = await getToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+};
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
@@ -45,9 +66,10 @@ async function fetchWithRetry(
 }
 
 export const publish = async (baseUrl: string, vault: string) => {
+  const headers = await getAuthHeaders();
   const response = await fetchWithRetry(`${baseUrl}/vaults/${vault}/publish`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({}),
   });
 
@@ -59,9 +81,10 @@ export const publish = async (baseUrl: string, vault: string) => {
 };
 
 export const deleteNote = async (baseUrl: string, vault: string, filePath: string) => {
+  const headers = await getAuthHeaders();
   const response = await fetchWithRetry(`${baseUrl}/vaults/${vault}/notes/${encodeURIComponent(filePath)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
 
   if (!response.ok) {
@@ -72,9 +95,10 @@ export const deleteNote = async (baseUrl: string, vault: string, filePath: strin
 };
 
 export const renameNote = async (baseUrl: string, vault: string, oldPath: string, newPath: string) => {
+  const headers = await getAuthHeaders();
   const response = await fetchWithRetry(`${baseUrl}/vaults/${vault}/notes/${encodeURIComponent(oldPath)}/rename`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ newPath }),
   });
 
@@ -86,9 +110,10 @@ export const renameNote = async (baseUrl: string, vault: string, oldPath: string
 };
 
 export const startSyncTask = async (baseUrl: string, vault: string) => {
+  const headers = await getAuthHeaders();
   const response = await fetchWithRetry(`${baseUrl}/vaults/${encodeURIComponent(vault)}/sync`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
 
   if (!response.ok) {
@@ -110,11 +135,13 @@ export const uploadSyncFile = async (
   const blob = new Blob([content], { type: mimeType });
   formData.append("file", blob, encodeURIComponent(filePath));
 
+  const headers = await getUploadAuthHeaders();
   const response = await fetchWithRetry(
     `${baseUrl}/vaults/${encodeURIComponent(vault)}/sync/${encodeURIComponent(taskId)}`,
     {
       method: "POST",
       body: formData,
+      headers,
     }
   );
 
@@ -126,11 +153,12 @@ export const uploadSyncFile = async (
 };
 
 export const completeSyncTask = async (baseUrl: string, vault: string, taskId: string) => {
+  const headers = await getAuthHeaders();
   const response = await fetchWithRetry(
     `${baseUrl}/vaults/${encodeURIComponent(vault)}/sync/${encodeURIComponent(taskId)}/complete`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
     }
   );
 

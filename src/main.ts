@@ -1,9 +1,10 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
-import { publish } from "./api";
+import { publish, setTokenProvider } from "./api";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
 import { SyncHandler } from "./sync-handler";
+import { getAccessToken, getCachedToken, initSupabase } from "./supabase";
 import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
@@ -18,10 +19,14 @@ export default class JadePublisherPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     this.vaultName = this.app.vault.getName();
+
+    initSupabase(this.settings.supabaseUrl, this.settings.supabaseAnonKey);
+    setTokenProvider(() => getAccessToken());
+
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
-      this.settings.accessToken,
+      () => getCachedToken(),
       (file, _doc, content, _filePath) => {
         this.app.vault.modify(file, content.toString());
       }

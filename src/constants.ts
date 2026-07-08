@@ -12,6 +12,8 @@ export enum NoteStatus {
 
 export const DEFAULT_SETTINGS = {
   endpoint: "",
+  supabaseUrl: "",
+  supabaseAnonKey: "",
   accessToken: "",
 } as const;
 
