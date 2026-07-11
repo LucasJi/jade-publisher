@@ -1,10 +1,10 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
 import { publish, setTokenProvider } from "./api";
+import { getAccessToken, getAuthState, getCachedToken, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
 import { SyncHandler } from "./sync-handler";
-import { getAccessToken, getCachedToken, initSupabase } from "./supabase";
 import type { JadePublisherSettings } from "./types";
 
 export default class JadePublisherPlugin extends Plugin {
@@ -17,16 +17,26 @@ export default class JadePublisherPlugin extends Plugin {
   }
 
   async onload() {
-    await this.loadSettings();
+    const rawData = (await this.loadData()) ?? {};
+    loadAuthState(rawData as Record<string, unknown>);
+
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, (rawData as Record<string, unknown>).settings ?? rawData);
     this.vaultName = this.app.vault.getName();
 
-    initSupabase(this.settings.supabaseUrl, this.settings.supabaseAnonKey);
-    setTokenProvider(() => getAccessToken());
+    setEndpoint(this.settings.endpoint);
+    setTokenProvider(async () => {
+      if (this.settings.accessToken) return this.settings.accessToken;
+      return getAccessToken();
+    });
+
+    setOnAuthChange(async () => {
+      await this.saveData({ settings: this.settings, auth: getAuthState() });
+    });
 
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
-      () => getCachedToken(),
+      () => (this.settings.accessToken ? this.settings.accessToken : getCachedToken()),
       (file, _doc, content, _filePath) => {
         this.app.vault.modify(file, content.toString());
       }
@@ -63,7 +73,6 @@ export default class JadePublisherPlugin extends Plugin {
       }
     });
 
-    // This adds a settings tab so the user can configure various aspects of the plugin
     this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
   }
 
@@ -72,11 +81,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.sessionManager.destroy();
   }
 
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-  }
-
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.saveData({ settings: this.settings, auth: getAuthState() });
   }
 }

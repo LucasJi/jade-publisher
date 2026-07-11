@@ -1,7 +1,7 @@
 import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { completeSyncTask, startSyncTask, uploadSyncFile } from "./api";
+import { getUserEmail, signIn, signOut } from "./auth";
 import type JadePublisherPlugin from "./main";
-import { getUserEmail, initSupabase, signIn, signOut } from "./supabase";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
   plugin: JadePublisherPlugin;
@@ -29,41 +29,13 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl)
-      .setName("Supabase URL")
-      .setDesc("Your Supabase project URL. Example: https://xxxxx.supabase.co")
-      .addText((text) =>
-        text.setValue(this.plugin.settings.supabaseUrl).onChange(async (value) => {
-          this.plugin.settings.supabaseUrl = value;
-          await this.plugin.saveSettings();
-          initSupabase(value, this.plugin.settings.supabaseAnonKey);
-          this.refreshAuthUI();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Supabase Anon Key")
-      .setDesc("Your Supabase project anon/public key (starts with eyJ...)")
-      .addText((text) => {
-        text
-          .setValue(this.plugin.settings.supabaseAnonKey)
-          .onChange(async (value) => {
-            this.plugin.settings.supabaseAnonKey = value;
-            await this.plugin.saveSettings();
-            initSupabase(this.plugin.settings.supabaseUrl, value);
-            this.refreshAuthUI();
-          });
-        text.inputEl.type = "password";
-        return text;
-      });
-
     this.authContainer = containerEl.createDiv("jade-auth-section");
     this.refreshAuthUI();
 
     new Setting(containerEl)
       .setName("Access token (fallback)")
       .setDesc(
-        "Static token override. Leave empty to use Supabase login. Takes precedence if set.",
+        "Static token override. Takes precedence over email/password login if set.",
       )
       .addText((text) => {
         text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
@@ -131,22 +103,11 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       });
   }
 
-  private async refreshAuthUI(): Promise<void> {
+  private refreshAuthUI(): void {
     this.authContainer.empty();
     this.authContainer.createEl("h3", { text: "Authentication" });
 
-    const url = this.plugin.settings.supabaseUrl;
-    const key = this.plugin.settings.supabaseAnonKey;
-
-    if (!url || !key) {
-      this.authContainer.createEl("p", {
-        text: "Configure Supabase URL and Anon Key above to enable authentication.",
-        cls: "setting-item-description",
-      });
-      return;
-    }
-
-    const email = await getUserEmail();
+    const email = getUserEmail();
 
     if (email) {
       this.authContainer.createEl("p", { text: `Signed in as ${email}` });
@@ -187,8 +148,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 
             const notice = new Notice("Signing in...", 0);
             try {
-              const { error } = await signIn(emailVal, passwordVal);
-              if (error) throw error;
+              await signIn(emailVal, passwordVal);
               notice.hide();
               new Notice("Signed in successfully");
               this.refreshAuthUI();
