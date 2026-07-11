@@ -11,7 +11,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
   const token = await getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
   return headers;
 };

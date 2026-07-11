@@ -1,5 +1,4 @@
 // src/session-manager.ts
-// @ts-ignore
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import type { TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
@@ -9,6 +8,7 @@ import { WEBSOCKET_PATH } from "./constants";
 export class SessionManager {
   private activeProvider: HocuspocusProvider | null = null;
   private activeIndexeddbPersistence: IndexeddbPersistence | null = null;
+  private activeDoc: Y.Doc | null = null;
   private activeFilePath: string | null = null;
   private activeDocName: string | null = null;
   private activeDocUpdateHandler:
@@ -31,6 +31,10 @@ export class SessionManager {
     return this.activeProvider;
   }
 
+  get doc(): Y.Doc | null {
+    return this.activeDoc;
+  }
+
   get filePath(): string | null {
     return this.activeFilePath;
   }
@@ -38,8 +42,8 @@ export class SessionManager {
   destroy(): void {
     this.sessionGeneration++;
 
-    if (this.activeProvider && this.activeDocUpdateHandler) {
-      this.activeProvider.document.off("updateV2", this.activeDocUpdateHandler);
+    if (this.activeDoc && this.activeDocUpdateHandler) {
+      this.activeDoc.off("updateV2", this.activeDocUpdateHandler);
     }
 
     if (this.activeProvider?.configuration.websocketProvider) {
@@ -50,12 +54,13 @@ export class SessionManager {
 
     this.activeProvider = null;
     this.activeIndexeddbPersistence = null;
+    this.activeDoc = null;
     this.activeFilePath = null;
     this.activeDocName = null;
     this.activeDocUpdateHandler = null;
   }
 
-  switchTo(file: TFile): void {
+  async switchTo(file: TFile): Promise<void> {
     const filePath = file.path;
     const docName = `${this.vaultName}/${filePath}`;
 
@@ -66,26 +71,37 @@ export class SessionManager {
     this.destroy();
 
     const generation = this.sessionGeneration;
-    const wsUrl = `${this.endpoint.replace(/^http/, "ws").replace(/\/+$/, "")}${WEBSOCKET_PATH}`;
 
-    const provider = new HocuspocusProvider({
-      url: wsUrl,
-      name: docName,
-      token: this.getToken as unknown as string | (() => string) | (() => Promise<string>) | null,
-      onConnect: () => {
-        if (generation !== this.sessionGeneration) return;
-        console.log(`Doc "${docName}" connects to server successfully!`);
-      },
-      onSynced: ({ state }) => {
-        if (generation !== this.sessionGeneration) return;
-        console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
-      },
-      onDestroy: () => {
-        console.log(`Provider of doc "${docName}" destroyed`);
-      },
-    });
+    const ydoc = new Y.Doc();
+    const indexeddbPersistence = new IndexeddbPersistence(docName, ydoc);
 
-    const indexeddbPersistence = new IndexeddbPersistence(docName, provider.document);
+    const token = await this.getToken();
+
+    let provider: HocuspocusProvider | null = null;
+
+    if (token) {
+      const wsUrl = `${this.endpoint.replace(/^http/, "ws").replace(/\/+$/, "")}${WEBSOCKET_PATH}`;
+
+      provider = new HocuspocusProvider({
+        url: wsUrl,
+        name: docName,
+        document: ydoc,
+        token,
+        onConnect: () => {
+          if (generation !== this.sessionGeneration) return;
+          console.log(`Doc "${docName}" connects to server successfully!`);
+        },
+        onSynced: ({ state }) => {
+          if (generation !== this.sessionGeneration) return;
+          console.log(`Restore doc "${docName}" from server ${state ? "successfully" : "failed"}!`);
+        },
+        onDestroy: () => {
+          console.log(`Provider of doc "${docName}" destroyed`);
+        },
+      });
+    } else {
+      console.log(`No auth token, skipping WebSocket for "${docName}"`);
+    }
 
     const updateHandler = (_: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => {
       if (generation !== this.sessionGeneration) return;
@@ -117,10 +133,11 @@ export class SessionManager {
       console.log("Unknown origin, ignore");
     };
 
-    provider.document.on("updateV2", updateHandler);
+    ydoc.on("updateV2", updateHandler);
 
     this.activeProvider = provider;
     this.activeIndexeddbPersistence = indexeddbPersistence;
+    this.activeDoc = ydoc;
     this.activeFilePath = filePath;
     this.activeDocName = docName;
     this.activeDocUpdateHandler = updateHandler;

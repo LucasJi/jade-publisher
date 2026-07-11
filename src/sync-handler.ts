@@ -34,11 +34,11 @@ export class SyncHandler {
           return;
         }
 
-        const capturedProvider = this.sessionManager.provider;
+        const capturedDoc = this.sessionManager.doc;
         const capturedFilePath = this.sessionManager.filePath;
 
-        if (!capturedProvider || !capturedFilePath) {
-          console.log(`Provider not available for ${file.path}, skip syncing`);
+        if (!capturedDoc || !capturedFilePath) {
+          console.log(`Session not available for ${file.path}, skip syncing`);
           return;
         }
 
@@ -49,16 +49,16 @@ export class SyncHandler {
 
         this.debounceTimer = setTimeout(() => {
           this.debounceTimer = null;
-          this.handleModify(file, capturedProvider.document as Y.Doc, capturedFilePath);
+          this.handleModify(file, capturedDoc, capturedFilePath);
         }, this.DEBOUNCE_MS);
       })
     );
   }
 
   private async handleModify(file: TFile, doc: Y.Doc, filePath: string): Promise<void> {
-    // Re-verify provider hasn't changed after debounce
-    if (this.sessionManager.provider?.document !== doc) {
-      console.log(`Provider switched during debounce for ${file.path}, skip syncing`);
+    // Re-verify doc hasn't changed after debounce
+    if (this.sessionManager.doc !== doc) {
+      console.log(`Session switched during debounce for ${file.path}, skip syncing`);
       return;
     }
 
@@ -66,8 +66,8 @@ export class SyncHandler {
       const text = await this.plugin.app.vault.cachedRead(file);
 
       // Re-check after async read
-      if (this.sessionManager.provider?.document !== doc || this.sessionManager.filePath !== filePath) {
-        console.log(`Provider switched during async read for ${file.path}, skip syncing`);
+      if (this.sessionManager.doc !== doc || this.sessionManager.filePath !== filePath) {
+        console.log(`Session switched during async read for ${file.path}, skip syncing`);
         return;
       }
 
@@ -102,7 +102,7 @@ export class SyncHandler {
 
   private registerRenameEvent(): void {
     this.plugin.registerEvent(
-      this.plugin.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
+      this.plugin.app.vault.on("rename", async (file: TAbstractFile, oldPath: string) => {
         console.log(`Rename file from ${oldPath} to ${file.path}`);
 
         // Sync rename to server
@@ -123,7 +123,7 @@ export class SyncHandler {
           return;
         }
 
-        this.sessionManager.switchTo(activeFile);
+        await this.sessionManager.switchTo(activeFile);
       })
     );
   }

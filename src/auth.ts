@@ -48,8 +48,10 @@ export const getAccessToken = async (): Promise<string | null> => {
   return cachedToken;
 };
 
-export const getCachedToken = (): string | null => {
-  return cachedToken;
+export const isAuthenticated = async (staticToken?: string): Promise<boolean> => {
+  if (staticToken) return true;
+  const token = await getAccessToken();
+  return token !== null;
 };
 
 export const signIn = async (email: string, password: string) => {

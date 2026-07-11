@@ -1,6 +1,6 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
 import { publish, setTokenProvider } from "./api";
-import { getAccessToken, getAuthState, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
+import { getAccessToken, getAuthState, isAuthenticated, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
@@ -46,7 +46,7 @@ export default class JadePublisherPlugin extends Plugin {
     syncHandler.registerEvents();
 
     this.registerEvent(
-      this.app.workspace.on("file-open", (file) => {
+      this.app.workspace.on("file-open", async (file) => {
         console.log("Opened file:", file?.name);
 
         if (!file) {
@@ -54,7 +54,7 @@ export default class JadePublisherPlugin extends Plugin {
         }
 
         if (this.isMarkdownFile(file)) {
-          this.sessionManager.switchTo(file);
+          await this.sessionManager.switchTo(file);
         } else {
           this.sessionManager.destroy();
         }
@@ -62,14 +62,18 @@ export default class JadePublisherPlugin extends Plugin {
     );
 
     this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
+      if (!(await isAuthenticated(this.settings.accessToken))) {
+        new Notice("Please log in first");
+        return;
+      }
       const baseUrl = `${this.settings.endpoint}/api`;
       try {
         const resp = await publish(baseUrl, this.vaultName);
         console.log("Publish Resp", resp);
-        new Notice("✅ Synced to Jade successfully");
+        new Notice("Synced to Jade successfully");
       } catch (error) {
         console.error("Publish failed:", error);
-        new Notice(`❌ Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        new Notice(`Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
     });
 

@@ -1,6 +1,6 @@
 import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { completeSyncTask, startSyncTask, uploadSyncFile } from "./api";
-import { getUserEmail, signIn, signOut } from "./auth";
+import { getAccessToken, getUserEmail, signIn, signOut } from "./auth";
 import type JadePublisherPlugin from "./main";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
@@ -26,7 +26,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         text.setValue(this.plugin.settings.endpoint).onChange(async (value) => {
           this.plugin.settings.endpoint = value;
           await this.plugin.saveSettings();
-        }),
+        })
       );
 
     this.authContainer = containerEl.createDiv("jade-auth-section");
@@ -34,9 +34,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Access token (fallback)")
-      .setDesc(
-        "Static token override. Takes precedence over email/password login if set.",
-      )
+      .setDesc("Static token override. Takes precedence over email/password login if set.")
       .addText((text) => {
         text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
           this.plugin.settings.accessToken = value;
@@ -51,6 +49,11 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       .setDesc("Click to sync the entire vault to your Jade service. This may take a while.")
       .addButton((button) => {
         button.setIcon("folder-sync").onClick(async () => {
+          const token = this.plugin.settings.accessToken || (await getAccessToken());
+          if (!token) {
+            new Notice("Please log in first");
+            return;
+          }
           const baseUrl = `${this.plugin.settings.endpoint}/api`;
           const vault = this.app.vault.getName();
           const files = this.app.vault.getFiles();
@@ -68,8 +71,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             for (let i = 0; i < files.length; i++) {
               const file = files[i];
               const content = await this.app.vault.readBinary(file);
-              const mimeType =
-                file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
+              const mimeType = file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
 
               await uploadSyncFile(baseUrl, vault, taskId, file.path, content, mimeType);
 
@@ -89,15 +91,13 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             notice.hide();
 
             new Notice(
-              `✅ Synced ${notesUploaded} notes, ${attachmentsUploaded} attachments` +
-                (deletedCount ? `, removed ${deletedCount} old notes` : ""),
+              `Synced ${notesUploaded} notes, ${attachmentsUploaded} attachments` +
+                (deletedCount ? `, removed ${deletedCount} old notes` : "")
             );
           } catch (error) {
             notice.hide();
             console.error("Vault sync failed:", error);
-            new Notice(
-              `❌ Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            );
+            new Notice(` Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`);
           }
         });
       });
@@ -114,67 +114,60 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         .setName("Signed in as")
         .setDesc(email)
         .addButton((button) =>
-          button
-            .setButtonText("Sign Out")
-            .onClick(async () => {
-              await signOut();
-              new Notice("Signed out");
-              this.refreshAuthUI();
-            }),
+          button.setButtonText("Sign Out").onClick(async () => {
+            await signOut();
+            new Notice("Signed out");
+            this.refreshAuthUI();
+          })
         );
     } else {
       const errorEl = this.authContainer.createDiv("jade-auth-error");
 
-      new Setting(this.authContainer)
-        .setName("Email")
-        .addText((text) => {
-          this.emailInput = text.inputEl;
-          text.inputEl.type = "email";
-          text.inputEl.addClass("jade-auth-input");
-        });
+      new Setting(this.authContainer).setName("Email").addText((text) => {
+        this.emailInput = text.inputEl;
+        text.inputEl.type = "email";
+        text.inputEl.addClass("jade-auth-input");
+      });
 
-      new Setting(this.authContainer)
-        .setName("Password")
-        .addText((text) => {
-          this.passwordInput = text.inputEl;
-          text.inputEl.type = "password";
-          text.inputEl.addClass("jade-auth-input");
-        });
+      new Setting(this.authContainer).setName("Password").addText((text) => {
+        this.passwordInput = text.inputEl;
+        text.inputEl.type = "password";
+        text.inputEl.addClass("jade-auth-input");
+      });
 
-      new Setting(this.authContainer)
-        .addButton((button) => {
-          button
-            .setButtonText("Sign In")
-            .setCta()
-            .onClick(async () => {
-              errorEl.removeClass("is-visible");
-              const emailVal = this.emailInput?.value.trim();
-              const passwordVal = this.passwordInput?.value;
+      new Setting(this.authContainer).addButton((button) => {
+        button
+          .setButtonText("Sign In")
+          .setCta()
+          .onClick(async () => {
+            errorEl.removeClass("is-visible");
+            const emailVal = this.emailInput?.value.trim();
+            const passwordVal = this.passwordInput?.value;
 
-              if (!emailVal || !passwordVal) {
-                errorEl.setText("Please enter email and password");
-                errorEl.addClass("is-visible");
-                return;
+            if (!emailVal || !passwordVal) {
+              errorEl.setText("Please enter email and password");
+              errorEl.addClass("is-visible");
+              return;
+            }
+
+            button.setDisabled(true);
+            button.setButtonText("Signing in...");
+            try {
+              await signIn(emailVal, passwordVal);
+              new Notice("Signed in successfully");
+              this.refreshAuthUI();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "Unknown error";
+              errorEl.setText(`Sign in failed: ${msg}`);
+              errorEl.addClass("is-visible");
+            } finally {
+              if (button.buttonEl.isConnected) {
+                button.setDisabled(false);
+                button.setButtonText("Sign In");
               }
-
-              button.setDisabled(true);
-              button.setButtonText("Signing in...");
-              try {
-                await signIn(emailVal, passwordVal);
-                new Notice("Signed in successfully");
-                this.refreshAuthUI();
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : "Unknown error";
-                errorEl.setText(`Sign in failed: ${msg}`);
-                errorEl.addClass("is-visible");
-              } finally {
-                if (button.buttonEl.isConnected) {
-                  button.setDisabled(false);
-                  button.setButtonText("Sign In");
-                }
-              }
-            });
-        });
+            }
+          });
+      });
     }
   }
 
