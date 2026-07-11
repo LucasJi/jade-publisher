@@ -78,6 +78,18 @@ export const signIn = async (email: string, password: string) => {
 };
 
 export const signOut = async () => {
+  if (cachedToken) {
+    fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cachedToken}`,
+      },
+    }).catch((err) => {
+      console.error("Failed to revoke token:", err);
+    });
+  }
+
   cachedToken = null;
   refreshToken = null;
   tokenExpiry = 0;
