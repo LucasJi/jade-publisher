@@ -116,6 +116,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         .addButton((button) =>
           button.setButtonText("Sign Out").onClick(async () => {
             await signOut();
+            this.plugin.refreshSession();
             new Notice("Signed out");
             this.refreshAuthUI();
           })
@@ -155,6 +156,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             try {
               await signIn(emailVal, passwordVal);
               new Notice("Signed in successfully");
+              this.plugin.refreshSession();
               this.refreshAuthUI();
             } catch (err) {
               const msg = err instanceof Error ? err.message : "Unknown error";

@@ -60,11 +60,11 @@ export class SessionManager {
     this.activeDocUpdateHandler = null;
   }
 
-  async switchTo(file: TFile): Promise<void> {
+  async switchTo(file: TFile, forceReconnect = false): Promise<void> {
     const filePath = file.path;
     const docName = `${this.vaultName}/${filePath}`;
 
-    if (this.activeDocName === docName) {
+    if (this.activeDocName === docName && !forceReconnect) {
       return;
     }
 

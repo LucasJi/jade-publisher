@@ -70,7 +70,13 @@ export default class JadePublisherPlugin extends Plugin {
       try {
         const resp = await publish(baseUrl, this.vaultName);
         console.log("Publish Resp", resp);
-        new Notice("Synced to Jade successfully");
+        const paths = resp?.data?.publishedPaths as string[] | undefined;
+        if (paths && paths.length > 0) {
+          const names = paths.map((p) => p.split("/").pop()).join(", ");
+          new Notice(`Published ${paths.length} notes: ${names}`);
+        } else {
+          new Notice("No new notes to publish");
+        }
       } catch (error) {
         console.error("Publish failed:", error);
         new Notice(`Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -83,6 +89,13 @@ export default class JadePublisherPlugin extends Plugin {
   onunload() {
     console.log("onunload");
     this.sessionManager.destroy();
+  }
+
+  async refreshSession() {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (activeFile && this.isMarkdownFile(activeFile)) {
+      await this.sessionManager.switchTo(activeFile, true);
+    }
   }
 
   async saveSettings() {
