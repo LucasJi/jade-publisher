@@ -71,7 +71,7 @@ export class SessionManager {
     const provider = new HocuspocusProvider({
       url: wsUrl,
       name: docName,
-      token: this.getToken() as string | (() => string) | (() => Promise<string>) | null,
+      token: this.getToken as unknown as string | (() => string) | (() => Promise<string>) | null,
       onConnect: () => {
         if (generation !== this.sessionGeneration) return;
         console.log(`Doc "${docName}" connects to server successfully!`);

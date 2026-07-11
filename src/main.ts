@@ -1,6 +1,6 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
 import { publish, setTokenProvider } from "./api";
-import { getAccessToken, getAuthState, getCachedToken, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
+import { getAccessToken, getAuthState, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
@@ -36,7 +36,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
-      () => (this.settings.accessToken ? this.settings.accessToken : getCachedToken()),
+      () => (this.settings.accessToken ? this.settings.accessToken : getAccessToken()),
       (file, _doc, content, _filePath) => {
         this.app.vault.modify(file, content.toString());
       }
