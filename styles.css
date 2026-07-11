@@ -1,0 +1,36 @@
+/* Jade Publisher Settings */
+
+.jade-auth-section {
+  margin-top: var(--size-4-4);
+  padding: var(--size-4-4);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.jade-auth-section h3 {
+  margin-top: 0;
+  margin-bottom: var(--size-4-2);
+}
+
+.jade-auth-section .setting-item {
+  border-top: none;
+  padding-top: var(--size-4-1);
+  padding-bottom: var(--size-4-1);
+}
+
+.jade-auth-input {
+  width: 100%;
+}
+
+.jade-auth-error {
+  display: none;
+  color: var(--text-error);
+  font-size: var(--font-smaller);
+  padding: var(--size-4-1) var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+}
+
+.jade-auth-error.is-visible {
+  display: block;
+}

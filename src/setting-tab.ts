@@ -110,22 +110,27 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     const email = getUserEmail();
 
     if (email) {
-      this.authContainer.createEl("p", { text: `Signed in as ${email}` });
-
       new Setting(this.authContainer)
+        .setName("Signed in as")
+        .setDesc(email)
         .addButton((button) =>
-          button.setButtonText("Sign Out").onClick(async () => {
-            await signOut();
-            new Notice("Signed out");
-            this.refreshAuthUI();
-          }),
+          button
+            .setButtonText("Sign Out")
+            .onClick(async () => {
+              await signOut();
+              new Notice("Signed out");
+              this.refreshAuthUI();
+            }),
         );
     } else {
+      const errorEl = this.authContainer.createDiv("jade-auth-error");
+
       new Setting(this.authContainer)
         .setName("Email")
         .addText((text) => {
           this.emailInput = text.inputEl;
           text.inputEl.type = "email";
+          text.inputEl.addClass("jade-auth-input");
         });
 
       new Setting(this.authContainer)
@@ -133,33 +138,43 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         .addText((text) => {
           this.passwordInput = text.inputEl;
           text.inputEl.type = "password";
+          text.inputEl.addClass("jade-auth-input");
         });
 
       new Setting(this.authContainer)
-        .addButton((button) =>
-          button.setButtonText("Sign In").onClick(async () => {
-            const emailVal = this.emailInput?.value.trim();
-            const passwordVal = this.passwordInput?.value;
+        .addButton((button) => {
+          button
+            .setButtonText("Sign In")
+            .setCta()
+            .onClick(async () => {
+              errorEl.removeClass("is-visible");
+              const emailVal = this.emailInput?.value.trim();
+              const passwordVal = this.passwordInput?.value;
 
-            if (!emailVal || !passwordVal) {
-              new Notice("Please enter email and password");
-              return;
-            }
+              if (!emailVal || !passwordVal) {
+                errorEl.setText("Please enter email and password");
+                errorEl.addClass("is-visible");
+                return;
+              }
 
-            const notice = new Notice("Signing in...", 0);
-            try {
-              await signIn(emailVal, passwordVal);
-              notice.hide();
-              new Notice("Signed in successfully");
-              this.refreshAuthUI();
-            } catch (err) {
-              notice.hide();
-              new Notice(
-                `Sign in failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-              );
-            }
-          }),
-        );
+              button.setDisabled(true);
+              button.setButtonText("Signing in...");
+              try {
+                await signIn(emailVal, passwordVal);
+                new Notice("Signed in successfully");
+                this.refreshAuthUI();
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "Unknown error";
+                errorEl.setText(`Sign in failed: ${msg}`);
+                errorEl.addClass("is-visible");
+              } finally {
+                if (button.buttonEl.isConnected) {
+                  button.setDisabled(false);
+                  button.setButtonText("Sign In");
+                }
+              }
+            });
+        });
     }
   }
 
