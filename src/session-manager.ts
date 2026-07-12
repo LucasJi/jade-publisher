@@ -16,6 +16,9 @@ export class SessionManager {
     | null = null;
   private sessionGeneration = 0;
 
+  onProviderConnected: (() => void) | null = null;
+  onProviderDisconnected: (() => void) | null = null;
+
   constructor(
     private vaultName: string,
     private endpoint: string,
@@ -60,6 +63,91 @@ export class SessionManager {
     this.activeDocUpdateHandler = null;
   }
 
+  async flushOfflineMutations(onProgress: (synced: number, total: number) => void = () => {}): Promise<number> {
+    if (typeof indexedDB?.databases !== "function") {
+      console.log("indexedDB.databases() not available, skip offline flush");
+      return 0;
+    }
+
+    let databases: { name?: string }[];
+    try {
+      databases = await indexedDB.databases();
+    } catch {
+      console.log("Failed to list IndexedDB databases, skip offline flush");
+      return 0;
+    }
+
+    const vaultPrefix = `${this.vaultName}/`;
+    const vaultDocNames = databases
+      .filter((db): db is { name: string } => db.name != null && db.name.startsWith(vaultPrefix))
+      .map((db) => db.name);
+
+    const inactiveDocNames = vaultDocNames.filter((n) => n !== this.activeDocName);
+
+    if (inactiveDocNames.length === 0) {
+      return 0;
+    }
+
+    const token = await this.getToken();
+    if (!token) {
+      console.log("No auth token available, skip offline flush");
+      return 0;
+    }
+
+    const wsUrl = `${this.endpoint.replace(/^http/, "ws").replace(/\/+$/, "")}${WEBSOCKET_PATH}`;
+    let syncedCount = 0;
+    const total = inactiveDocNames.length;
+
+    onProgress(0, total);
+
+    for (const docName of inactiveDocNames) {
+      const doc = new Y.Doc();
+      const indexeddbPersistence = new IndexeddbPersistence(docName, doc);
+
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 5000);
+        indexeddbPersistence.on("synced", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      });
+
+      const provider = new HocuspocusProvider({
+        url: wsUrl,
+        name: docName,
+        document: doc,
+        token,
+      });
+
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          settled = true;
+          provider.destroy();
+          indexeddbPersistence.destroy();
+          resolve();
+        }, 15000);
+
+        const cleanup = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          provider.destroy();
+          indexeddbPersistence.destroy();
+          resolve();
+        };
+
+        provider.on("synced", cleanup);
+        provider.on("connectionError", cleanup);
+      });
+
+      syncedCount++;
+      onProgress(syncedCount, total);
+    }
+
+    return syncedCount;
+  }
+
   async switchTo(file: TFile, forceReconnect = false): Promise<void> {
     const filePath = file.path;
     const docName = `${this.vaultName}/${filePath}`;
@@ -90,6 +178,12 @@ export class SessionManager {
         onConnect: () => {
           if (generation !== this.sessionGeneration) return;
           console.log(`Doc "${docName}" connects to server successfully!`);
+          this.onProviderConnected?.();
+        },
+        onDisconnect: () => {
+          if (generation !== this.sessionGeneration) return;
+          console.log(`Doc "${docName}" disconnected from server`);
+          this.onProviderDisconnected?.();
         },
         onSynced: ({ state }) => {
           if (generation !== this.sessionGeneration) return;

@@ -168,3 +168,53 @@ export const completeSyncTask = async (baseUrl: string, vault: string, taskId: s
 
   return response.json();
 };
+
+export const listNotesForVault = async (baseUrl: string, vault: string) => {
+  const response = await fetchWithRetry(`${baseUrl}/vaults/${encodeURIComponent(vault)}/notes`, {});
+
+  if (!response.ok) {
+    throw new Error(`List notes failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const getNoteText = async (baseUrl: string, vault: string, path: string) => {
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${encodeURIComponent(vault)}/note?path=${encodeURIComponent(path)}`,
+    {}
+  );
+
+  if (!response.ok) {
+    throw new Error(`Get note text failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const listStorageObjects = async (baseUrl: string, vault: string, prefix = "") => {
+  const url = prefix
+    ? `${baseUrl}/vaults/${encodeURIComponent(vault)}/storage/objects?prefix=${encodeURIComponent(prefix)}`
+    : `${baseUrl}/vaults/${encodeURIComponent(vault)}/storage/objects`;
+
+  const response = await fetchWithRetry(url, {});
+
+  if (!response.ok) {
+    throw new Error(`List storage objects failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+export const downloadStorageObject = async (baseUrl: string, vault: string, path: string) => {
+  const response = await fetchWithRetry(
+    `${baseUrl}/vaults/${encodeURIComponent(vault)}/storage/object?path=${encodeURIComponent(path)}`,
+    {}
+  );
+
+  if (!response.ok) {
+    throw new Error(`Download storage object failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.arrayBuffer();
+};

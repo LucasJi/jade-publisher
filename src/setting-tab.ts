@@ -1,5 +1,13 @@
-import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
-import { completeSyncTask, startSyncTask, uploadSyncFile } from "./api";
+import { type App, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
+import {
+  completeSyncTask,
+  downloadStorageObject,
+  getNoteText,
+  listNotesForVault,
+  listStorageObjects,
+  startSyncTask,
+  uploadSyncFile,
+} from "./api";
 import { getAccessToken, getUserEmail, signIn, signOut } from "./auth";
 import type JadePublisherPlugin from "./main";
 
@@ -8,6 +16,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
   private authContainer!: HTMLDivElement;
   private emailInput!: HTMLInputElement;
   private passwordInput!: HTMLInputElement;
+  private overwriteCheckbox!: HTMLElement;
 
   constructor(app: App, plugin: JadePublisherPlugin) {
     super(app, plugin);
@@ -101,6 +110,126 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           }
         });
       });
+
+    new Setting(containerEl)
+      .setName("Pull from remote")
+      .setDesc("Download vault from Jade service. This will create or overwrite files in your local vault.")
+      .addButton((button) => {
+        button.setIcon("folder-sync").onClick(async () => {
+          const token = this.plugin.settings.accessToken || (await getAccessToken());
+          if (!token) {
+            new Notice("Please log in first");
+            return;
+          }
+          await this.pullVault();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Overwrite existing files")
+      .setDesc("If enabled, existing local files will be overwritten by the remote version during pull.")
+      .addToggle((toggle) => {
+        this.overwriteCheckbox = toggle.setValue(false).toggleEl;
+      });
+  }
+
+  private async pullVault(): Promise<void> {
+    const baseUrl = `${this.plugin.settings.endpoint}/api`;
+    const vault = this.app.vault.getName();
+    const overwrite = (this.overwriteCheckbox as HTMLInputElement)?.checked ?? false;
+
+    const notice = new Notice("Pulling vault...", 0);
+    let notesPulled = 0;
+    let attachmentsPulled = 0;
+
+    try {
+      const notesResult = await listNotesForVault(baseUrl, vault);
+      const notes: Array<{ vault: string; path: string }> = notesResult?.data?.notes ?? [];
+      let total = notes.length;
+
+      let storageResult: { data?: { objects?: Array<{ name: string; path: string }> } } = { data: { objects: [] } };
+      try {
+        storageResult = await listStorageObjects(baseUrl, vault);
+      } catch (err) {
+        console.warn("Failed to list storage objects:", err);
+      }
+      const objects = storageResult?.data?.objects ?? [];
+      total += objects.length;
+
+      for (let i = 0; i < notes.length; i++) {
+        const note = notes[i];
+        const filePath = note.path;
+        const existingFile = this.app.vault.getAbstractFileByPath(filePath);
+
+        if (!overwrite && existingFile) {
+          continue;
+        }
+
+        const textResult = await getNoteText(baseUrl, vault, filePath);
+        const text = (textResult?.data?.text as string) ?? "";
+
+        await this.ensureParentFolder(filePath);
+
+        if (existingFile) {
+          await this.app.vault.modify(existingFile as TFile, text);
+        } else {
+          await this.app.vault.create(filePath, text);
+        }
+        notesPulled++;
+
+        if ((i + 1) % 5 === 0 || i === notes.length - 1) {
+          notice.setMessage(`Pulling vault... (${notesPulled + attachmentsPulled}/${total} files)`);
+        }
+      }
+
+      for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i];
+        const filePath = obj.path;
+        const existingFile = this.app.vault.getAbstractFileByPath(filePath);
+
+        if (!overwrite && existingFile) {
+          continue;
+        }
+
+        const buffer = await downloadStorageObject(baseUrl, vault, filePath);
+
+        await this.ensureParentFolder(filePath);
+
+        if (existingFile) {
+          await this.app.vault.modifyBinary(existingFile as TFile, buffer);
+        } else {
+          await this.app.vault.createBinary(filePath, buffer);
+        }
+        attachmentsPulled++;
+
+        const done = notes.length + i + 1;
+        if (done % 5 === 0 || done === total) {
+          notice.setMessage(`Pulling vault... (${done}/${total} files)`);
+        }
+      }
+
+      notice.hide();
+      new Notice(`Pulled ${notesPulled} notes, ${attachmentsPulled} attachments`);
+    } catch (error) {
+      notice.hide();
+      console.error("Pull vault failed:", error);
+      new Notice(`Pull failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  private async ensureParentFolder(filePath: string): Promise<void> {
+    const parts = filePath.split("/");
+    parts.pop();
+    if (parts.length === 0) return;
+
+    let currentPath = "";
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      const exists = this.app.vault.getAbstractFileByPath(currentPath);
+      if (!exists) {
+        await this.app.vault.createFolder(currentPath);
+      }
+    }
   }
 
   private refreshAuthUI(): void {

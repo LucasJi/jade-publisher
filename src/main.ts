@@ -11,9 +11,37 @@ export default class JadePublisherPlugin extends Plugin {
   settings!: JadePublisherSettings;
   vaultName = "";
   private sessionManager!: SessionManager;
+  private statusBarItem!: HTMLElement;
+  private needsFlush = false;
+  private flushing = false;
 
   private isMarkdownFile(file: TAbstractFile | null): boolean {
     return file instanceof TFile && file.extension === "md";
+  }
+
+  private async triggerFlush(): Promise<void> {
+    if (this.flushing) return;
+    this.flushing = true;
+
+    try {
+      const synced = await this.sessionManager.flushOfflineMutations((done, total) => {
+        this.statusBarItem.setText(`Syncing ${done}/${total} offline docs...`);
+      });
+
+      if (synced > 0) {
+        this.statusBarItem.setText(`Synced ${synced} offline docs`);
+        setTimeout(() => {
+          this.statusBarItem.setText("");
+        }, 5000);
+      } else {
+        this.statusBarItem.setText("");
+      }
+    } catch (error) {
+      console.error("Offline flush failed:", error);
+      this.statusBarItem.setText("");
+    } finally {
+      this.flushing = false;
+    }
   }
 
   async onload() {
@@ -41,6 +69,26 @@ export default class JadePublisherPlugin extends Plugin {
         this.app.vault.modify(file, content.toString());
       }
     );
+
+    this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem.setText("");
+
+    this.sessionManager.onProviderConnected = () => {
+      if (this.needsFlush) {
+        this.needsFlush = false;
+        this.triggerFlush();
+      }
+    };
+
+    this.sessionManager.onProviderDisconnected = () => {
+      console.log("Provider disconnected, will flush on reconnect");
+      this.needsFlush = true;
+    };
+
+    setTimeout(() => {
+      this.needsFlush = true;
+      this.triggerFlush();
+    }, 3000);
 
     const syncHandler = new SyncHandler(this, this.sessionManager);
     syncHandler.registerEvents();
@@ -72,8 +120,7 @@ export default class JadePublisherPlugin extends Plugin {
         console.log("Publish Resp", resp);
         const paths = resp?.data?.publishedPaths as string[] | undefined;
         if (paths && paths.length > 0) {
-          const names = paths.map((p) => p.split("/").pop()).join(", ");
-          new Notice(`Published ${paths.length} notes: ${names}`);
+          new Notice(`Published ${paths.length} notes`);
         } else {
           new Notice("No new notes to publish");
         }
