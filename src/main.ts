@@ -14,6 +14,7 @@ export default class JadePublisherPlugin extends Plugin {
   private statusBarItem!: HTMLElement;
   private needsFlush = false;
   private flushing = false;
+  private deferredFlush = false;
 
   private isMarkdownFile(file: TAbstractFile | null): boolean {
     return file instanceof TFile && file.extension === "md";
@@ -85,7 +86,12 @@ export default class JadePublisherPlugin extends Plugin {
       this.needsFlush = true;
     };
 
-    setTimeout(() => {
+    setTimeout(async () => {
+      const token = this.settings.accessToken || (await getAccessToken());
+      if (!token) {
+        this.deferredFlush = true;
+        return;
+      }
       this.needsFlush = true;
       this.triggerFlush();
     }, 3000);
@@ -142,6 +148,11 @@ export default class JadePublisherPlugin extends Plugin {
     const activeFile = this.app.workspace.getActiveFile();
     if (activeFile && this.isMarkdownFile(activeFile)) {
       await this.sessionManager.switchTo(activeFile, true);
+    }
+
+    if (this.deferredFlush) {
+      this.deferredFlush = false;
+      this.triggerFlush();
     }
   }
 

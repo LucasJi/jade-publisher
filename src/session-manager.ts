@@ -42,6 +42,16 @@ export class SessionManager {
     return this.activeFilePath;
   }
 
+  deleteOfflineData(docName: string): void {
+    const request = indexedDB.deleteDatabase(docName);
+    request.onerror = () => {
+      console.warn(`Failed to delete IndexedDB for ${docName}`);
+    };
+    request.onsuccess = () => {
+      console.log(`Deleted IndexedDB for ${docName}`);
+    };
+  }
+
   destroy(): void {
     this.sessionGeneration++;
 

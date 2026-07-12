@@ -138,6 +138,9 @@ export class SyncHandler {
           deleteNote(baseUrl, this.plugin.vaultName, file.path).catch((error) => {
             console.error(`Failed to sync deletion of ${file.path}:`, error);
           });
+
+          const docName = `${this.plugin.vaultName}/${file.path}`;
+          this.sessionManager.deleteOfflineData(docName);
         }
       })
     );
