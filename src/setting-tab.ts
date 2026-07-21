@@ -1,5 +1,6 @@
-import { type App, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
+import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type JadePublisherPlugin from "./main";
+import { VaultPullService, VaultSyncService } from "./vault-operations";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
   plugin: JadePublisherPlugin;
@@ -7,10 +8,14 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
   private emailInput!: HTMLInputElement;
   private passwordInput!: HTMLInputElement;
   private overwriteCheckbox!: HTMLElement;
+  private syncService: VaultSyncService;
+  private pullService: VaultPullService;
 
   constructor(app: App, plugin: JadePublisherPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.syncService = new VaultSyncService(plugin.apiClient, app.vault);
+    this.pullService = new VaultPullService(plugin.apiClient, app.vault);
   }
 
   display(): void {
@@ -53,43 +58,17 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             new Notice("Please log in first");
             return;
           }
-          const files = this.app.vault.getFiles();
           const notice = new Notice("Syncing vault...", 0);
-          let notesUploaded = 0;
-          let attachmentsUploaded = 0;
 
           try {
-            const startResult = await this.plugin.apiClient.startSyncTask();
-            const taskId = startResult.data?.taskId as string;
-            if (!taskId) {
-              throw new Error("Failed to create sync task");
-            }
+            const result = await this.syncService.syncAll((done, total) => {
+              notice.setMessage(`Syncing vault... (${done}/${total} files)`);
+            });
 
-            for (let i = 0; i < files.length; i++) {
-              const file = files[i];
-              const content = await this.app.vault.readBinary(file);
-              const mimeType = file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
-
-              await this.plugin.apiClient.uploadSyncFile(taskId, file.path, content, mimeType);
-
-              if (file.extension === "md") {
-                notesUploaded++;
-              } else {
-                attachmentsUploaded++;
-              }
-
-              if ((i + 1) % 5 === 0 || i === files.length - 1) {
-                notice.setMessage(`Syncing vault... (${i + 1}/${files.length} files)`);
-              }
-            }
-
-            const completeResult = await this.plugin.apiClient.completeSyncTask(taskId);
-            const deletedCount = completeResult.data?.deletedCount as number;
             notice.hide();
-
             new Notice(
-              `Synced ${notesUploaded} notes, ${attachmentsUploaded} attachments` +
-                (deletedCount ? `, removed ${deletedCount} old notes` : "")
+              `Synced ${result.notesUploaded} notes, ${result.attachmentsUploaded} attachments` +
+                (result.deletedCount ? `, removed ${result.deletedCount} old notes` : "")
             );
           } catch (error) {
             notice.hide();
@@ -123,98 +102,19 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
 
   private async pullVault(): Promise<void> {
     const overwrite = (this.overwriteCheckbox as HTMLInputElement)?.checked ?? false;
-
     const notice = new Notice("Pulling vault...", 0);
-    let notesPulled = 0;
-    let attachmentsPulled = 0;
 
     try {
-      const notesResult = await this.plugin.apiClient.listNotesForVault();
-      const notes: Array<{ vault: string; path: string }> = notesResult?.data?.notes ?? [];
-      let total = notes.length;
-
-      let storageResult: { data?: { objects?: Array<{ name: string; path: string }> } } = { data: { objects: [] } };
-      try {
-        storageResult = await this.plugin.apiClient.listStorageObjects();
-      } catch (err) {
-        console.warn("Failed to list storage objects:", err);
-      }
-      const objects = storageResult?.data?.objects ?? [];
-      total += objects.length;
-
-      for (let i = 0; i < notes.length; i++) {
-        const note = notes[i];
-        const filePath = note.path;
-        const existingFile = this.app.vault.getAbstractFileByPath(filePath);
-
-        if (!overwrite && existingFile) {
-          continue;
-        }
-
-        const textResult = await this.plugin.apiClient.getNoteText(filePath);
-        const text = (textResult?.data?.text as string) ?? "";
-
-        await this.ensureParentFolder(filePath);
-
-        if (existingFile) {
-          await this.app.vault.modify(existingFile as TFile, text);
-        } else {
-          await this.app.vault.create(filePath, text);
-        }
-        notesPulled++;
-
-        if ((i + 1) % 5 === 0 || i === notes.length - 1) {
-          notice.setMessage(`Pulling vault... (${notesPulled + attachmentsPulled}/${total} files)`);
-        }
-      }
-
-      for (let i = 0; i < objects.length; i++) {
-        const obj = objects[i];
-        const filePath = obj.path;
-        const existingFile = this.app.vault.getAbstractFileByPath(filePath);
-
-        if (!overwrite && existingFile) {
-          continue;
-        }
-
-        const buffer = await this.plugin.apiClient.downloadStorageObject(filePath);
-
-        await this.ensureParentFolder(filePath);
-
-        if (existingFile) {
-          await this.app.vault.modifyBinary(existingFile as TFile, buffer);
-        } else {
-          await this.app.vault.createBinary(filePath, buffer);
-        }
-        attachmentsPulled++;
-
-        const done = notes.length + i + 1;
-        if (done % 5 === 0 || done === total) {
-          notice.setMessage(`Pulling vault... (${done}/${total} files)`);
-        }
-      }
+      const result = await this.pullService.pullAll(overwrite, (done, total) => {
+        notice.setMessage(`Pulling vault... (${done}/${total} files)`);
+      });
 
       notice.hide();
-      new Notice(`Pulled ${notesPulled} notes, ${attachmentsPulled} attachments`);
+      new Notice(`Pulled ${result.notesPulled} notes, ${result.attachmentsPulled} attachments`);
     } catch (error) {
       notice.hide();
       console.error("Pull vault failed:", error);
       new Notice(`Pull failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
-  }
-
-  private async ensureParentFolder(filePath: string): Promise<void> {
-    const parts = filePath.split("/");
-    parts.pop();
-    if (parts.length === 0) return;
-
-    let currentPath = "";
-    for (const part of parts) {
-      currentPath = currentPath ? `${currentPath}/${part}` : part;
-      const exists = this.app.vault.getAbstractFileByPath(currentPath);
-      if (!exists) {
-        await this.app.vault.createFolder(currentPath);
-      }
     }
   }
 
@@ -286,21 +186,5 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           });
       });
     }
-  }
-
-  private getMimeType(ext: string): string {
-    const map: Record<string, string> = {
-      png: "image/png",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      gif: "image/gif",
-      svg: "image/svg+xml",
-      webp: "image/webp",
-      pdf: "application/pdf",
-      mp3: "audio/mpeg",
-      mp4: "video/mp4",
-      webm: "video/webm",
-    };
-    return map[ext] ?? "application/octet-stream";
   }
 }
