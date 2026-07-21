@@ -5,6 +5,7 @@ import { deleteNote, renameNote } from "./api";
 import { dmp } from "./constants";
 import type JadePublisherPlugin from "./main";
 import type { SessionManager } from "./session-manager";
+import type { ContentWriter } from "./types";
 
 export class SyncHandler {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -12,7 +13,8 @@ export class SyncHandler {
 
   constructor(
     private plugin: JadePublisherPlugin,
-    private sessionManager: SessionManager
+    private sessionManager: SessionManager,
+    private contentWriter: ContentWriter
   ) {}
 
   registerEvents(): void {
@@ -29,7 +31,7 @@ export class SyncHandler {
           return;
         }
 
-        if (this.sessionManager.applyingServerUpdate) {
+        if (this.contentWriter.isWriting) {
           return;
         }
 

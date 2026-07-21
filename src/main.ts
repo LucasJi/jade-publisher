@@ -5,7 +5,32 @@ import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
 import { SyncHandler } from "./sync-handler";
-import type { JadePublisherSettings } from "./types";
+import type { ContentWriter, JadePublisherSettings } from "./types";
+
+class VaultContentWriter implements ContentWriter {
+  private _isWriting = false;
+
+  get isWriting(): boolean {
+    return this._isWriting;
+  }
+
+  constructor(
+    private vault: { modify: (file: TFile, data: string) => Promise<void> },
+    private resolveFile: (filePath: string) => TFile | null
+  ) {}
+
+  writeContent(filePath: string, content: string): void {
+    const file = this.resolveFile(filePath);
+    if (!file) return;
+
+    this._isWriting = true;
+    try {
+      this.vault.modify(file, content);
+    } finally {
+      this._isWriting = false;
+    }
+  }
+}
 
 export default class JadePublisherPlugin extends Plugin {
   settings!: JadePublisherSettings;
@@ -62,18 +87,17 @@ export default class JadePublisherPlugin extends Plugin {
       await this.saveData({ settings: this.settings, auth: getAuthState() });
     });
 
+    const contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
+      this.app.vault.getAbstractFileByPath(filePath) instanceof TFile
+        ? (this.app.vault.getAbstractFileByPath(filePath) as TFile)
+        : null
+    );
+
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
       () => (this.settings.accessToken ? this.settings.accessToken : getAccessToken()),
-      (file, _doc, content, _filePath) => {
-        this.sessionManager.applyingServerUpdate = true;
-        try {
-          this.app.vault.modify(file, content.toString());
-        } finally {
-          this.sessionManager.applyingServerUpdate = false;
-        }
-      }
+      contentWriter
     );
 
     this.statusBarItem = this.addStatusBarItem();
@@ -101,7 +125,7 @@ export default class JadePublisherPlugin extends Plugin {
       this.triggerFlush();
     }, 3000);
 
-    const syncHandler = new SyncHandler(this, this.sessionManager);
+    const syncHandler = new SyncHandler(this, this.sessionManager, contentWriter);
     syncHandler.registerEvents();
 
     this.registerEvent(

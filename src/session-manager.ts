@@ -4,6 +4,7 @@ import type { TFile } from "obsidian";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { WEBSOCKET_PATH } from "./constants";
+import type { ContentWriter } from "./types";
 
 export class SessionManager {
   private activeProvider: HocuspocusProvider | null = null;
@@ -15,7 +16,6 @@ export class SessionManager {
     | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
     | null = null;
   private sessionGeneration = 0;
-  private _applyingServerUpdate = false;
 
   onProviderConnected: (() => void) | null = null;
   onProviderDisconnected: (() => void) | null = null;
@@ -24,7 +24,7 @@ export class SessionManager {
     private vaultName: string,
     private endpoint: string,
     private getToken: () => string | null | Promise<string | null>,
-    private onServerUpdate: (file: TFile, doc: Y.Doc, content: Y.Text, filePath: string) => void
+    private contentWriter: ContentWriter
   ) {}
 
   get docName(): string | null {
@@ -41,14 +41,6 @@ export class SessionManager {
 
   get filePath(): string | null {
     return this.activeFilePath;
-  }
-
-  get applyingServerUpdate(): boolean {
-    return this._applyingServerUpdate;
-  }
-
-  set applyingServerUpdate(value: boolean) {
-    this._applyingServerUpdate = value;
   }
 
   deleteOfflineData(docName: string): void {
@@ -237,7 +229,7 @@ export class SessionManager {
           if (type instanceof Y.Text) {
             console.log(`Doc ${filePath} changed, try to sync`);
             console.log("Latest content:", content);
-            this.onServerUpdate(file, doc, content, filePath);
+            this.contentWriter.writeContent(filePath, content.toString());
           }
         });
         return;
