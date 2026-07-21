@@ -1,7 +1,6 @@
-import type { Diff } from "diff-match-patch";
 import { type TAbstractFile, TFile } from "obsidian";
 import type * as Y from "yjs";
-import { dmp } from "./constants";
+import { applyDiffToDoc } from "./diff";
 import type JadePublisherPlugin from "./main";
 import type { SessionManager } from "./session-manager";
 import type { ContentWriter } from "./types";
@@ -76,36 +75,7 @@ export class SyncHandler {
         return;
       }
 
-      const content = doc.getText("content");
-      const oldContent = content.toString();
-      const diffs: Diff[] = dmp.diff_main(oldContent, text);
-
-      dmp.diff_cleanupSemantic(diffs);
-
-      let cursor = 0;
-
-      doc.transact(() => {
-        const currentContent = content.toString();
-        if (currentContent !== oldContent) {
-          console.log(`Content changed during diff computation for ${file.path}, skip applying diffs`);
-          return;
-        }
-
-        for (const [operation, diffText] of diffs) {
-          switch (operation) {
-            case 1:
-              content.insert(cursor, diffText);
-              cursor += diffText.length;
-              break;
-            case 0:
-              cursor += diffText.length;
-              break;
-            case -1:
-              content.delete(cursor, diffText.length);
-              break;
-          }
-        }
-      }, null);
+      applyDiffToDoc(doc, text);
     } catch (error) {
       console.error(`Failed to sync modifications for ${file.path}:`, error);
     }
