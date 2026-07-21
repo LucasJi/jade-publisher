@@ -1,6 +1,6 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
 import { publish, setTokenProvider } from "./api";
-import { getAccessToken, getAuthState, isAuthenticated, loadAuthState, setEndpoint, setOnAuthChange } from "./auth";
+import { AuthClient } from "./auth";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
 import Ob2JadeSettingTab from "./setting-tab";
@@ -35,6 +35,7 @@ class VaultContentWriter implements ContentWriter {
 export default class JadePublisherPlugin extends Plugin {
   settings!: JadePublisherSettings;
   vaultName = "";
+  authClient!: AuthClient;
   private sessionManager!: SessionManager;
   private statusBarItem!: HTMLElement;
   private needsFlush = false;
@@ -72,20 +73,17 @@ export default class JadePublisherPlugin extends Plugin {
 
   async onload() {
     const rawData = (await this.loadData()) ?? {};
-    loadAuthState(rawData as Record<string, unknown>);
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, (rawData as Record<string, unknown>).settings ?? rawData);
     this.vaultName = this.app.vault.getName();
 
-    setEndpoint(this.settings.endpoint);
-    setTokenProvider(async () => {
-      if (this.settings.accessToken) return this.settings.accessToken;
-      return getAccessToken();
+    this.authClient = new AuthClient(this.settings.endpoint, async () => {
+      await this.saveData({ settings: this.settings, auth: this.authClient.getState() });
     });
+    this.authClient.loadState(rawData as Record<string, unknown>);
+    this.authClient.setStaticToken(this.settings.accessToken);
 
-    setOnAuthChange(async () => {
-      await this.saveData({ settings: this.settings, auth: getAuthState() });
-    });
+    setTokenProvider(() => this.authClient.getToken());
 
     const contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
       this.app.vault.getAbstractFileByPath(filePath) instanceof TFile
@@ -96,7 +94,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.sessionManager = new SessionManager(
       this.vaultName,
       this.settings.endpoint,
-      () => (this.settings.accessToken ? this.settings.accessToken : getAccessToken()),
+      () => this.authClient.getToken(),
       contentWriter
     );
 
@@ -116,7 +114,7 @@ export default class JadePublisherPlugin extends Plugin {
     };
 
     setTimeout(async () => {
-      const token = this.settings.accessToken || (await getAccessToken());
+      const token = await this.authClient.getToken();
       if (!token) {
         this.deferredFlush = true;
         return;
@@ -145,7 +143,7 @@ export default class JadePublisherPlugin extends Plugin {
     );
 
     this.addRibbonIcon("cloud-upload", "Sync to Jade", async () => {
-      if (!(await isAuthenticated(this.settings.accessToken))) {
+      if (!(await this.authClient.isAuthenticated())) {
         new Notice("Please log in first");
         return;
       }
@@ -186,6 +184,6 @@ export default class JadePublisherPlugin extends Plugin {
   }
 
   async saveSettings() {
-    await this.saveData({ settings: this.settings, auth: getAuthState() });
+    await this.saveData({ settings: this.settings, auth: this.authClient.getState() });
   }
 }

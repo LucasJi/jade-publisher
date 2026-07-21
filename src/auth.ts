@@ -1,123 +1,140 @@
-let cachedToken: string | null = null;
-let refreshToken: string | null = null;
-let tokenExpiry: number = 0;
-let userEmail: string | null = null;
-let baseUrl = "";
-let pluginSave: (() => Promise<void>) | null = null;
+export class AuthClient {
+  private cachedToken: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiry = 0;
+  private userEmail: string | null = null;
+  private baseUrl: string;
+  private staticToken: string | null = null;
+  private saveFn: (() => Promise<void>) | null = null;
 
-export const setOnAuthChange = (save: () => Promise<void>) => {
-  pluginSave = save;
-};
+  constructor(baseUrl: string, saveFn?: () => Promise<void>) {
+    this.baseUrl = `${baseUrl}/api`;
+    this.saveFn = saveFn ?? null;
+  }
 
-export const loadAuthState = (data: Record<string, unknown> | null) => {
-  const auth = (data?.auth as Record<string, unknown>) ?? {};
-  cachedToken = (auth.token as string) ?? null;
-  refreshToken = (auth.refreshToken as string) ?? null;
-  tokenExpiry = (auth.tokenExpiry as number) ?? 0;
-  userEmail = (auth.userEmail as string) ?? null;
-};
+  setStaticToken(token: string | null): void {
+    this.staticToken = token;
+  }
 
-export const getAuthState = () => ({
-  token: cachedToken,
-  refreshToken,
-  tokenExpiry,
-  userEmail,
-});
+  setSaveFn(fn: () => Promise<void>): void {
+    this.saveFn = fn;
+  }
 
-export const setEndpoint = (endpoint: string) => {
-  baseUrl = `${endpoint}/api`;
-};
+  loadState(data: Record<string, unknown> | null): void {
+    const auth = (data?.auth as Record<string, unknown>) ?? {};
+    this.cachedToken = (auth.token as string) ?? null;
+    this.refreshToken = (auth.refreshToken as string) ?? null;
+    this.tokenExpiry = (auth.tokenExpiry as number) ?? 0;
+    this.userEmail = (auth.userEmail as string) ?? null;
+  }
 
-export const getAccessToken = async (): Promise<string | null> => {
-  if (cachedToken && tokenExpiry && Date.now() > tokenExpiry - 60_000) {
-    if (refreshToken) {
-      try {
-        await doRefresh();
-      } catch {
-        cachedToken = null;
-        refreshToken = null;
-        tokenExpiry = 0;
-        userEmail = null;
-        await pluginSave?.();
+  getState(): {
+    token: string | null;
+    refreshToken: string | null;
+    tokenExpiry: number;
+    userEmail: string | null;
+  } {
+    return {
+      token: this.cachedToken,
+      refreshToken: this.refreshToken,
+      tokenExpiry: this.tokenExpiry,
+      userEmail: this.userEmail,
+    };
+  }
+
+  async getToken(): Promise<string | null> {
+    if (this.staticToken) return this.staticToken;
+
+    if (this.cachedToken && this.tokenExpiry && Date.now() > this.tokenExpiry - 60_000) {
+      if (this.refreshToken) {
+        try {
+          await this.doRefresh();
+        } catch {
+          this.cachedToken = null;
+          this.refreshToken = null;
+          this.tokenExpiry = 0;
+          this.userEmail = null;
+          await this.saveFn?.();
+        }
+      } else {
+        this.cachedToken = null;
+        this.tokenExpiry = 0;
       }
-    } else {
-      cachedToken = null;
-      tokenExpiry = 0;
     }
-  }
-  return cachedToken;
-};
-
-export const isAuthenticated = async (staticToken?: string): Promise<boolean> => {
-  if (staticToken) return true;
-  const token = await getAccessToken();
-  return token !== null;
-};
-
-export const signIn = async (email: string, password: string) => {
-  const resp = await fetch(`${baseUrl}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  const json = await resp.json();
-
-  if (json.code !== 0) {
-    throw new Error(json.msg ?? "Login failed");
+    return this.cachedToken;
   }
 
-  cachedToken = json.data.access_token;
-  refreshToken = json.data.refresh_token;
-  tokenExpiry = (json.data.expires_at as number) * 1000;
-  userEmail = email;
+  async isAuthenticated(): Promise<boolean> {
+    if (this.staticToken) return true;
+    const token = await this.getToken();
+    return token !== null;
+  }
 
-  await pluginSave?.();
-
-  return json;
-};
-
-export const signOut = async () => {
-  if (cachedToken) {
-    fetch(`${baseUrl}/auth/logout`, {
+  async signIn(email: string, password: string) {
+    const resp = await fetch(`${this.baseUrl}/auth/login`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${cachedToken}`,
-      },
-    }).catch((err) => {
-      console.error("Failed to revoke token:", err);
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
+
+    const json = await resp.json();
+
+    if (json.code !== 0) {
+      throw new Error(json.msg ?? "Login failed");
+    }
+
+    this.cachedToken = json.data.access_token;
+    this.refreshToken = json.data.refresh_token;
+    this.tokenExpiry = (json.data.expires_at as number) * 1000;
+    this.userEmail = email;
+
+    await this.saveFn?.();
+
+    return json;
   }
 
-  cachedToken = null;
-  refreshToken = null;
-  tokenExpiry = 0;
-  userEmail = null;
+  async signOut(): Promise<void> {
+    if (this.cachedToken) {
+      fetch(`${this.baseUrl}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.cachedToken}`,
+        },
+      }).catch((err) => {
+        console.error("Failed to revoke token:", err);
+      });
+    }
 
-  await pluginSave?.();
-};
+    this.cachedToken = null;
+    this.refreshToken = null;
+    this.tokenExpiry = 0;
+    this.userEmail = null;
 
-export const getUserEmail = (): string | null => {
-  return userEmail;
-};
-
-async function doRefresh() {
-  const resp = await fetch(`${baseUrl}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-
-  const json = await resp.json();
-
-  if (json.code !== 0) {
-    throw new Error(json.msg ?? "Token refresh failed");
+    await this.saveFn?.();
   }
 
-  cachedToken = json.data.access_token;
-  refreshToken = json.data.refresh_token;
-  tokenExpiry = (json.data.expires_at as number) * 1000;
+  getUserEmail(): string | null {
+    return this.userEmail;
+  }
 
-  await pluginSave?.();
+  private async doRefresh() {
+    const resp = await fetch(`${this.baseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: this.refreshToken }),
+    });
+
+    const json = await resp.json();
+
+    if (json.code !== 0) {
+      throw new Error(json.msg ?? "Token refresh failed");
+    }
+
+    this.cachedToken = json.data.access_token;
+    this.refreshToken = json.data.refresh_token;
+    this.tokenExpiry = (json.data.expires_at as number) * 1000;
+
+    await this.saveFn?.();
+  }
 }

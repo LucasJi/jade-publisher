@@ -8,7 +8,6 @@ import {
   startSyncTask,
   uploadSyncFile,
 } from "./api";
-import { getAccessToken, getUserEmail, signIn, signOut } from "./auth";
 import type JadePublisherPlugin from "./main";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
@@ -58,7 +57,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       .setDesc("Click to sync the entire vault to your Jade service. This may take a while.")
       .addButton((button) => {
         button.setIcon("folder-sync").onClick(async () => {
-          const token = this.plugin.settings.accessToken || (await getAccessToken());
+          const token = await this.plugin.authClient.getToken();
           if (!token) {
             new Notice("Please log in first");
             return;
@@ -116,7 +115,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       .setDesc("Download vault from Jade service. This will create or overwrite files in your local vault.")
       .addButton((button) => {
         button.setIcon("folder-sync").onClick(async () => {
-          const token = this.plugin.settings.accessToken || (await getAccessToken());
+          const token = await this.plugin.authClient.getToken();
           if (!token) {
             new Notice("Please log in first");
             return;
@@ -236,7 +235,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     this.authContainer.empty();
     this.authContainer.createEl("h3", { text: "Authentication" });
 
-    const email = getUserEmail();
+    const email = this.plugin.authClient.getUserEmail();
 
     if (email) {
       new Setting(this.authContainer)
@@ -244,7 +243,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         .setDesc(email)
         .addButton((button) =>
           button.setButtonText("Sign Out").onClick(async () => {
-            await signOut();
+            await this.plugin.authClient.signOut();
             this.plugin.refreshSession();
             new Notice("Signed out");
             this.refreshAuthUI();
@@ -283,7 +282,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             button.setDisabled(true);
             button.setButtonText("Signing in...");
             try {
-              await signIn(emailVal, passwordVal);
+              await this.plugin.authClient.signIn(emailVal, passwordVal);
               new Notice("Signed in successfully");
               this.plugin.refreshSession();
               this.refreshAuthUI();
