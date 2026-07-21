@@ -1,7 +1,6 @@
 import type { Diff } from "diff-match-patch";
 import { type TAbstractFile, TFile } from "obsidian";
 import type * as Y from "yjs";
-import { deleteNote, renameNote } from "./api";
 import { dmp } from "./constants";
 import type JadePublisherPlugin from "./main";
 import type { SessionManager } from "./session-manager";
@@ -119,8 +118,7 @@ export class SyncHandler {
 
         // Sync rename to server
         if (file instanceof TFile && file.extension === "md") {
-          const baseUrl = `${this.plugin.settings.endpoint}/api`;
-          renameNote(baseUrl, this.plugin.vaultName, oldPath, file.path).catch((error) => {
+          this.plugin.apiClient.renameNote(oldPath, file.path).catch((error) => {
             console.error(`Failed to sync rename from ${oldPath} to ${file.path}:`, error);
           });
         }
@@ -146,8 +144,7 @@ export class SyncHandler {
         console.log(`Delete file ${file.path}`);
 
         if (file instanceof TFile && file.extension === "md") {
-          const baseUrl = `${this.plugin.settings.endpoint}/api`;
-          deleteNote(baseUrl, this.plugin.vaultName, file.path).catch((error) => {
+          this.plugin.apiClient.deleteNote(file.path).catch((error) => {
             console.error(`Failed to sync deletion of ${file.path}:`, error);
           });
 

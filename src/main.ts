@@ -1,5 +1,5 @@
 import { Notice, Plugin, type TAbstractFile, TFile } from "obsidian";
-import { publish, setTokenProvider } from "./api";
+import { ApiClient } from "./api";
 import { AuthClient } from "./auth";
 import { DEFAULT_SETTINGS } from "./constants";
 import { SessionManager } from "./session-manager";
@@ -36,6 +36,7 @@ export default class JadePublisherPlugin extends Plugin {
   settings!: JadePublisherSettings;
   vaultName = "";
   authClient!: AuthClient;
+  apiClient!: ApiClient;
   private sessionManager!: SessionManager;
   private statusBarItem!: HTMLElement;
   private needsFlush = false;
@@ -83,7 +84,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.authClient.loadState(rawData as Record<string, unknown>);
     this.authClient.setStaticToken(this.settings.accessToken);
 
-    setTokenProvider(() => this.authClient.getToken());
+    this.apiClient = new ApiClient(this.settings.endpoint, this.vaultName, this.authClient);
 
     const contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
       this.app.vault.getAbstractFileByPath(filePath) instanceof TFile
@@ -147,9 +148,8 @@ export default class JadePublisherPlugin extends Plugin {
         new Notice("Please log in first");
         return;
       }
-      const baseUrl = `${this.settings.endpoint}/api`;
       try {
-        const resp = await publish(baseUrl, this.vaultName);
+        const resp = await this.apiClient.publish();
         console.log("Publish Resp", resp);
         const paths = resp?.data?.publishedPaths as string[] | undefined;
         if (paths && paths.length > 0) {

@@ -1,13 +1,4 @@
 import { type App, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
-import {
-  completeSyncTask,
-  downloadStorageObject,
-  getNoteText,
-  listNotesForVault,
-  listStorageObjects,
-  startSyncTask,
-  uploadSyncFile,
-} from "./api";
 import type JadePublisherPlugin from "./main";
 
 export default class Ob2JadeSettingTab extends PluginSettingTab {
@@ -62,15 +53,13 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             new Notice("Please log in first");
             return;
           }
-          const baseUrl = `${this.plugin.settings.endpoint}/api`;
-          const vault = this.app.vault.getName();
           const files = this.app.vault.getFiles();
           const notice = new Notice("Syncing vault...", 0);
           let notesUploaded = 0;
           let attachmentsUploaded = 0;
 
           try {
-            const startResult = await startSyncTask(baseUrl, vault);
+            const startResult = await this.plugin.apiClient.startSyncTask();
             const taskId = startResult.data?.taskId as string;
             if (!taskId) {
               throw new Error("Failed to create sync task");
@@ -81,7 +70,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
               const content = await this.app.vault.readBinary(file);
               const mimeType = file.extension === "md" ? "text/markdown" : this.getMimeType(file.extension);
 
-              await uploadSyncFile(baseUrl, vault, taskId, file.path, content, mimeType);
+              await this.plugin.apiClient.uploadSyncFile(taskId, file.path, content, mimeType);
 
               if (file.extension === "md") {
                 notesUploaded++;
@@ -94,7 +83,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
               }
             }
 
-            const completeResult = await completeSyncTask(baseUrl, vault, taskId);
+            const completeResult = await this.plugin.apiClient.completeSyncTask(taskId);
             const deletedCount = completeResult.data?.deletedCount as number;
             notice.hide();
 
@@ -133,8 +122,6 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
   }
 
   private async pullVault(): Promise<void> {
-    const baseUrl = `${this.plugin.settings.endpoint}/api`;
-    const vault = this.app.vault.getName();
     const overwrite = (this.overwriteCheckbox as HTMLInputElement)?.checked ?? false;
 
     const notice = new Notice("Pulling vault...", 0);
@@ -142,13 +129,13 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     let attachmentsPulled = 0;
 
     try {
-      const notesResult = await listNotesForVault(baseUrl, vault);
+      const notesResult = await this.plugin.apiClient.listNotesForVault();
       const notes: Array<{ vault: string; path: string }> = notesResult?.data?.notes ?? [];
       let total = notes.length;
 
       let storageResult: { data?: { objects?: Array<{ name: string; path: string }> } } = { data: { objects: [] } };
       try {
-        storageResult = await listStorageObjects(baseUrl, vault);
+        storageResult = await this.plugin.apiClient.listStorageObjects();
       } catch (err) {
         console.warn("Failed to list storage objects:", err);
       }
@@ -164,7 +151,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           continue;
         }
 
-        const textResult = await getNoteText(baseUrl, vault, filePath);
+        const textResult = await this.plugin.apiClient.getNoteText(filePath);
         const text = (textResult?.data?.text as string) ?? "";
 
         await this.ensureParentFolder(filePath);
@@ -190,7 +177,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           continue;
         }
 
-        const buffer = await downloadStorageObject(baseUrl, vault, filePath);
+        const buffer = await this.plugin.apiClient.downloadStorageObject(filePath);
 
         await this.ensureParentFolder(filePath);
 
