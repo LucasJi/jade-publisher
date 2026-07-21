@@ -67,7 +67,12 @@ export default class JadePublisherPlugin extends Plugin {
       this.settings.endpoint,
       () => (this.settings.accessToken ? this.settings.accessToken : getAccessToken()),
       (file, _doc, content, _filePath) => {
-        this.app.vault.modify(file, content.toString());
+        this.sessionManager.applyingServerUpdate = true;
+        try {
+          this.app.vault.modify(file, content.toString());
+        } finally {
+          this.sessionManager.applyingServerUpdate = false;
+        }
       }
     );
 

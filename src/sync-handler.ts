@@ -29,6 +29,10 @@ export class SyncHandler {
           return;
         }
 
+        if (this.sessionManager.applyingServerUpdate) {
+          return;
+        }
+
         const activeFile: TFile | null = this.plugin.app.workspace.getActiveFile();
         if (file !== activeFile) {
           return;
@@ -80,6 +84,12 @@ export class SyncHandler {
       let cursor = 0;
 
       doc.transact(() => {
+        const currentContent = content.toString();
+        if (currentContent !== oldContent) {
+          console.log(`Content changed during diff computation for ${file.path}, skip applying diffs`);
+          return;
+        }
+
         for (const [operation, diffText] of diffs) {
           switch (operation) {
             case 1:

@@ -15,6 +15,7 @@ export class SessionManager {
     | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
     | null = null;
   private sessionGeneration = 0;
+  private _applyingServerUpdate = false;
 
   onProviderConnected: (() => void) | null = null;
   onProviderDisconnected: (() => void) | null = null;
@@ -40,6 +41,14 @@ export class SessionManager {
 
   get filePath(): string | null {
     return this.activeFilePath;
+  }
+
+  get applyingServerUpdate(): boolean {
+    return this._applyingServerUpdate;
+  }
+
+  set applyingServerUpdate(value: boolean) {
+    this._applyingServerUpdate = value;
   }
 
   deleteOfflineData(docName: string): void {
