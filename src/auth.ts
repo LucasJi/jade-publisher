@@ -4,17 +4,12 @@ export class AuthClient {
   private tokenExpiry = 0;
   private userEmail: string | null = null;
   private baseUrl: string;
-  private staticToken: string | null = null;
   private saveFn: (() => Promise<void>) | null = null;
   private refreshPromise: Promise<void> | null = null;
 
   constructor(baseUrl: string, saveFn?: () => Promise<void>) {
     this.baseUrl = `${baseUrl}/api`;
     this.saveFn = saveFn ?? null;
-  }
-
-  setStaticToken(token: string | null): void {
-    this.staticToken = token;
   }
 
   setEndpoint(baseUrl: string): void {
@@ -55,8 +50,6 @@ export class AuthClient {
   }
 
   async getToken(): Promise<string | null> {
-    if (this.staticToken) return this.staticToken;
-
     if (this.cachedToken && this.tokenExpiry && Date.now() > this.tokenExpiry - 60_000) {
       if (this.refreshToken) {
         if (!this.refreshPromise) {
@@ -83,7 +76,6 @@ export class AuthClient {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    if (this.staticToken) return true;
     const token = await this.getToken();
     return token !== null;
   }

@@ -94,7 +94,6 @@ export default class JadePublisherPlugin extends Plugin {
       await this.saveData({ settings: this.settings, auth: await this.authClient.getState() });
     });
     this.authClient.loadState(rawData as Record<string, unknown>);
-    this.authClient.setStaticToken(this.settings.accessToken);
 
     this.apiClient = new ApiClient(this.settings.endpoint, this.vaultName, this.authClient);
 

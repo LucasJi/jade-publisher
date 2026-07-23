@@ -32,19 +32,6 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(containerEl)
-      .setName("Access token (fallback)")
-      .setDesc("Static token override. Takes precedence over email/password login if set.")
-      .addText((text) => {
-        text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
-          this.plugin.settings.accessToken = value;
-          this.plugin.authClient.setStaticToken(value || null);
-          await this.plugin.saveSettings();
-        });
-        text.inputEl.type = "password";
-        return text;
-      });
-
     this.authContainer = containerEl.createDiv("jade-auth-section");
     this.refreshAuthUI();
 
@@ -152,8 +139,6 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           })
         );
     } else {
-      const errorEl = this.authContainer.createDiv("jade-auth-error");
-
       new Setting(this.authContainer).setName("Email").addText((text) => {
         this.emailInput = text.inputEl;
         text.inputEl.type = "email";
@@ -171,13 +156,11 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           .setButtonText("Sign In")
           .setCta()
           .onClick(async () => {
-            errorEl.removeClass("is-visible");
             const emailVal = this.emailInput?.value.trim();
             const passwordVal = this.passwordInput?.value;
 
             if (!emailVal || !passwordVal) {
-              errorEl.setText("Please enter email and password");
-              errorEl.addClass("is-visible");
+              new Notice("Please enter email and password");
               return;
             }
 
@@ -190,8 +173,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
               this.refreshAuthUI();
             } catch (err) {
               const msg = err instanceof Error ? err.message : "Unknown error";
-              errorEl.setText(`Sign in failed: ${msg}`);
-              errorEl.addClass("is-visible");
+              new Notice(`Sign in failed: ${msg}`);
             } finally {
               if (button.buttonEl.isConnected) {
                 button.setDisabled(false);
