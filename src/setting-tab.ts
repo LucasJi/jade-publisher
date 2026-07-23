@@ -175,10 +175,8 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
               const msg = err instanceof Error ? err.message : "Unknown error";
               new Notice(`Sign in failed: ${msg}`);
             } finally {
-              if (button.buttonEl.isConnected) {
-                button.setDisabled(false);
-                button.setButtonText("Sign In");
-              }
+              button.setDisabled(false);
+              button.setButtonText("Sign In");
             }
           });
       });
