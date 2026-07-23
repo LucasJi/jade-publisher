@@ -79,6 +79,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
               `Synced ${result.notesUploaded} notes, ${result.attachmentsUploaded} attachments` +
                 (result.deletedCount ? `, removed ${result.deletedCount} old notes` : "")
             );
+            this.plugin.resetOfflineCache();
           } catch (error) {
             notice.hide();
             console.error("Vault sync failed:", error);
@@ -128,6 +129,8 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     } finally {
       this.plugin.contentWriter.endSuppress();
     }
+
+    await this.plugin.resetOfflineCache();
   }
 
   private refreshAuthUI(): void {

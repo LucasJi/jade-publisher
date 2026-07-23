@@ -218,4 +218,15 @@ export default class JadePublisherPlugin extends Plugin {
     await this.saveSettings();
     await this.refreshSession();
   }
+
+  async resetOfflineCache() {
+    this.sessionManager.destroy();
+    const deleted = await this.sessionManager.clearAllOfflineData();
+    console.log(`Reset offline cache: cleared ${deleted} databases`);
+
+    const activeFile = this.app.workspace.getActiveFile();
+    if (activeFile && this.isMarkdownFile(activeFile)) {
+      await this.sessionManager.switchTo(activeFile, true);
+    }
+  }
 }

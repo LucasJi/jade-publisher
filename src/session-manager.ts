@@ -87,6 +87,41 @@ export class SessionManager {
     return cleaned;
   }
 
+  async clearAllOfflineData(): Promise<number> {
+    if (typeof indexedDB?.databases !== "function") return 0;
+
+    let databases: { name?: string }[];
+    try {
+      databases = await indexedDB.databases();
+    } catch {
+      console.warn("Failed to list IndexedDB databases for clear");
+      return 0;
+    }
+
+    const prefix = `${this.vaultName}/`;
+    const activeName = this.activeDocName;
+    const toDelete = databases
+      .filter((db): db is { name: string } => db.name != null && db.name.startsWith(prefix) && db.name !== activeName)
+      .map((db) => db.name);
+
+    let deleted = 0;
+    for (const name of toDelete) {
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = () => {
+          deleted++;
+          resolve();
+        };
+        request.onerror = () => resolve();
+      });
+    }
+
+    if (deleted > 0) {
+      console.log(`Cleared ${deleted} offline IndexedDB databases for vault "${this.vaultName}"`);
+    }
+    return deleted;
+  }
+
   destroy(): void {
     this.sessionGeneration++;
 
