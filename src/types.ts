@@ -2,6 +2,7 @@
 export interface JadePublisherSettings {
   endpoint: string;
   accessToken: string;
+  lastVaultName?: string;
 }
 
 export interface ContentWriter {

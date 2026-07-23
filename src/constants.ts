@@ -6,6 +6,7 @@ export const WEBSOCKET_PATH = "/hocuspocus";
 export const DEFAULT_SETTINGS = {
   endpoint: "",
   accessToken: "",
+  lastVaultName: "",
 } as const;
 
 export const dmp = new diff_match_patch();

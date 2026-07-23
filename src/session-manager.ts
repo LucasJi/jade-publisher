@@ -53,6 +53,40 @@ export class SessionManager {
     };
   }
 
+  async cleanupOrphanedDatabases(vaultName: string): Promise<number> {
+    if (typeof indexedDB?.databases !== "function") return 0;
+
+    let databases: { name?: string }[];
+    try {
+      databases = await indexedDB.databases();
+    } catch {
+      console.warn("Failed to list IndexedDB databases for cleanup");
+      return 0;
+    }
+
+    const prefix = `${vaultName}/`;
+    const orphaned = databases
+      .filter((db): db is { name: string } => db.name != null && db.name.startsWith(prefix))
+      .map((db) => db.name);
+
+    let cleaned = 0;
+    for (const name of orphaned) {
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = () => {
+          cleaned++;
+          resolve();
+        };
+        request.onerror = () => resolve();
+      });
+    }
+
+    if (cleaned > 0) {
+      console.log(`Cleaned ${cleaned} orphaned IndexedDB databases from vault "${vaultName}"`);
+    }
+    return cleaned;
+  }
+
   destroy(): void {
     this.sessionGeneration++;
 

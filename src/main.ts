@@ -88,6 +88,8 @@ export default class JadePublisherPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, (rawData as Record<string, unknown>).settings ?? rawData);
     this.vaultName = this.app.vault.getName();
 
+    const previousVaultName = this.settings.lastVaultName || "";
+
     this.authClient = new AuthClient(this.settings.endpoint, async () => {
       await this.saveData({ settings: this.settings, auth: await this.authClient.getState() });
     });
@@ -110,6 +112,15 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.statusBarItem = this.addStatusBarItem();
     this.statusBarItem.setText("");
+
+    if (previousVaultName && previousVaultName !== this.vaultName) {
+      console.log(`Vault renamed from "${previousVaultName}" to "${this.vaultName}", cleaning orphaned caches...`);
+      this.sessionManager.cleanupOrphanedDatabases(previousVaultName).then((count) => {
+        if (count > 0) {
+          new Notice(`Cleaned ${count} orphaned offline caches from old vault "${previousVaultName}"`);
+        }
+      });
+    }
 
     this.sessionManager.onProviderConnected = () => {
       if (this.needsFlush) {
@@ -173,6 +184,9 @@ export default class JadePublisherPlugin extends Plugin {
     });
 
     this.addSettingTab(new Ob2JadeSettingTab(this.app, this));
+
+    this.settings.lastVaultName = this.vaultName;
+    await this.saveSettings();
   }
 
   onunload() {
@@ -193,6 +207,7 @@ export default class JadePublisherPlugin extends Plugin {
   }
 
   async saveSettings() {
+    this.settings.lastVaultName = this.vaultName;
     await this.saveData({ settings: this.settings, auth: await this.authClient.getState() });
   }
 
