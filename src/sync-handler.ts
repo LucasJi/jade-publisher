@@ -77,6 +77,11 @@ export class SyncHandler {
       }
 
       applyDiffToDoc(doc, text);
+
+      if (!this.sessionManager.provider) {
+        const docName = `${this.plugin.vaultName}/${filePath}`;
+        this.sessionManager.markDirty(docName);
+      }
     } catch (error) {
       console.error(`Failed to sync modifications for ${file.path}:`, error);
     }

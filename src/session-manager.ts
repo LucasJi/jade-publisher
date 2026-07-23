@@ -16,6 +16,7 @@ export class SessionManager {
     | ((update: Uint8Array, origin: unknown, doc: Y.Doc, transaction: Y.Transaction) => void)
     | null = null;
   private sessionGeneration = 0;
+  private dirtyRegistryDb: IDBDatabase | null = null;
 
   onProviderConnected: (() => void) | null = null;
   onProviderDisconnected: (() => void) | null = null;
@@ -53,6 +54,83 @@ export class SessionManager {
     };
   }
 
+  private async openDirtyRegistry(): Promise<IDBDatabase> {
+    if (this.dirtyRegistryDb) return this.dirtyRegistryDb;
+
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("jade-dirty-registry", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("dirty")) {
+          request.result.createObjectStore("dirty", { keyPath: "name" });
+        }
+      };
+      request.onsuccess = () => {
+        this.dirtyRegistryDb = request.result;
+        resolve(request.result);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  markDirty(docName: string): void {
+    this.openDirtyRegistry()
+      .then((db) => {
+        const tx = db.transaction("dirty", "readwrite");
+        tx.objectStore("dirty").put({ name: docName });
+      })
+      .catch((err) => console.warn("Failed to mark dirty:", err));
+  }
+
+  clearDirty(docName: string): void {
+    this.openDirtyRegistry()
+      .then((db) => {
+        const tx = db.transaction("dirty", "readwrite");
+        tx.objectStore("dirty").delete(docName);
+      })
+      .catch(() => {});
+  }
+
+  async isDirty(docName: string): Promise<boolean> {
+    try {
+      const db = await this.openDirtyRegistry();
+      return new Promise((resolve) => {
+        const tx = db.transaction("dirty", "readonly");
+        const req = tx.objectStore("dirty").get(docName);
+        req.onsuccess = () => resolve(req.result !== undefined);
+        req.onerror = () => resolve(false);
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  private async clearDirtyByPrefix(prefix: string): Promise<number> {
+    try {
+      const db = await this.openDirtyRegistry();
+      return new Promise((resolve) => {
+        const tx = db.transaction("dirty", "readwrite");
+        const store = tx.objectStore("dirty");
+        const request = store.openCursor();
+        let count = 0;
+
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) {
+            if ((cursor.key as string).startsWith(prefix)) {
+              store.delete(cursor.key);
+              count++;
+            }
+            cursor.continue();
+          }
+        };
+        tx.oncomplete = () => resolve(count);
+        tx.onerror = () => resolve(0);
+      });
+    } catch {
+      return 0;
+    }
+  }
+
   async cleanupOrphanedDatabases(vaultName: string): Promise<number> {
     if (typeof indexedDB?.databases !== "function") return 0;
 
@@ -83,6 +161,10 @@ export class SessionManager {
 
     if (cleaned > 0) {
       console.log(`Cleaned ${cleaned} orphaned IndexedDB databases from vault "${vaultName}"`);
+    }
+    const dirtyCleaned = await this.clearDirtyByPrefix(`${vaultName}/`);
+    if (dirtyCleaned > 0) {
+      console.log(`Cleaned ${dirtyCleaned} orphaned dirty markers from vault "${vaultName}"`);
     }
     return cleaned;
   }
@@ -118,6 +200,10 @@ export class SessionManager {
 
     if (deleted > 0) {
       console.log(`Cleared ${deleted} offline IndexedDB databases for vault "${this.vaultName}"`);
+    }
+    const dirtyCleaned = await this.clearDirtyByPrefix(prefix);
+    if (dirtyCleaned > 0) {
+      console.log(`Cleared ${dirtyCleaned} dirty markers for vault "${this.vaultName}"`);
     }
     return deleted;
   }
@@ -182,6 +268,13 @@ export class SessionManager {
     onProgress(0, total);
 
     for (const docName of inactiveDocNames) {
+      const dirty = await this.isDirty(docName);
+      if (!dirty) {
+        syncedCount++;
+        onProgress(syncedCount, total);
+        continue;
+      }
+
       const doc = new Y.Doc();
       const indexeddbPersistence = new IndexeddbPersistence(docName, doc);
 
@@ -194,12 +287,6 @@ export class SessionManager {
           resolve();
         });
       });
-
-      if (Y.encodeStateAsUpdate(doc).length <= 50) {
-        indexeddbPersistence.destroy();
-        syncedCount++;
-        continue;
-      }
 
       const provider = new HocuspocusProvider({
         url: wsUrl,
@@ -234,6 +321,9 @@ export class SessionManager {
         provider.on("connectionError", cleanup);
       });
 
+      if (providerSynced) {
+        this.clearDirty(docName);
+      }
       if (idxSynced || providerSynced) {
         syncedCount++;
       }
