@@ -6,6 +6,7 @@ export class AuthClient {
   private baseUrl: string;
   private staticToken: string | null = null;
   private saveFn: (() => Promise<void>) | null = null;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(baseUrl: string, saveFn?: () => Promise<void>) {
     this.baseUrl = `${baseUrl}/api`;
@@ -51,15 +52,21 @@ export class AuthClient {
 
     if (this.cachedToken && this.tokenExpiry && Date.now() > this.tokenExpiry - 60_000) {
       if (this.refreshToken) {
-        try {
-          await this.doRefresh();
-        } catch {
-          this.cachedToken = null;
-          this.refreshToken = null;
-          this.tokenExpiry = 0;
-          this.userEmail = null;
-          await this.saveFn?.();
+        if (!this.refreshPromise) {
+          this.refreshPromise = (async () => {
+            try {
+              await this.doRefresh();
+            } catch {
+              this.cachedToken = null;
+              this.refreshToken = null;
+              this.tokenExpiry = 0;
+              this.userEmail = null;
+              await this.saveFn?.();
+            }
+          })();
         }
+        await this.refreshPromise;
+        this.refreshPromise = null;
       } else {
         this.cachedToken = null;
         this.tokenExpiry = 0;
