@@ -37,18 +37,6 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     this.refreshAuthUI();
 
     new Setting(containerEl)
-      .setName("Access token (fallback)")
-      .setDesc("Static token override. Takes precedence over email/password login if set.")
-      .addText((text) => {
-        text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
-          this.plugin.settings.accessToken = value;
-          await this.plugin.saveSettings();
-        });
-        text.inputEl.type = "password";
-        return text;
-      });
-
-    new Setting(containerEl)
       .setName("Sync vault")
       .setDesc("Click to sync the entire vault to your Jade service. This may take a while.")
       .addButton((button) => {
