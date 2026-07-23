@@ -28,8 +28,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       .setDesc("The endpoint of your Jade service. For example: http://localhost:3000")
       .addText((text) =>
         text.setValue(this.plugin.settings.endpoint).onChange(async (value) => {
-          this.plugin.settings.endpoint = value;
-          await this.plugin.saveSettings();
+          await this.plugin.updateEndpoint(value);
         })
       );
 

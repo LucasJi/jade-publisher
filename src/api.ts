@@ -57,6 +57,10 @@ export class ApiClient {
     this.authClient = authClient;
   }
 
+  setEndpoint(baseUrl: string): void {
+    this.baseUrl = `${baseUrl}/api`;
+  }
+
   private async getAuthHeaders(): Promise<Record<string, string>> {
     const token = await this.authClient.getToken();
     const headers: Record<string, string> = { "Content-Type": "application/json" };

@@ -16,6 +16,10 @@ export class AuthClient {
     this.staticToken = token;
   }
 
+  setEndpoint(baseUrl: string): void {
+    this.baseUrl = `${baseUrl}/api`;
+  }
+
   setSaveFn(fn: () => Promise<void>): void {
     this.saveFn = fn;
   }

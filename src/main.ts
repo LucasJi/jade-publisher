@@ -186,4 +186,12 @@ export default class JadePublisherPlugin extends Plugin {
   async saveSettings() {
     await this.saveData({ settings: this.settings, auth: this.authClient.getState() });
   }
+
+  async updateEndpoint(endpoint: string) {
+    this.settings.endpoint = endpoint;
+    this.authClient.setEndpoint(endpoint);
+    this.apiClient.setEndpoint(endpoint);
+    await this.saveSettings();
+    await this.refreshSession();
+  }
 }
