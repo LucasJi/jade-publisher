@@ -33,12 +33,19 @@ export class AuthClient {
     this.userEmail = (auth.userEmail as string) ?? null;
   }
 
-  getState(): {
+  async getState(): Promise<{
     token: string | null;
     refreshToken: string | null;
     tokenExpiry: number;
     userEmail: string | null;
-  } {
+  }> {
+    if (this.refreshPromise) {
+      try {
+        await this.refreshPromise;
+      } catch {
+        // refresh failed, state already cleared
+      }
+    }
     return {
       token: this.cachedToken,
       refreshToken: this.refreshToken,
@@ -82,6 +89,18 @@ export class AuthClient {
   }
 
   async signIn(email: string, password: string) {
+    if (this.cachedToken) {
+      fetch(`${this.baseUrl}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.cachedToken}`,
+        },
+      }).catch((err) => {
+        console.error("Failed to revoke previous token:", err);
+      });
+    }
+
     const resp = await fetch(`${this.baseUrl}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

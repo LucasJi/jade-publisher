@@ -89,7 +89,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.vaultName = this.app.vault.getName();
 
     this.authClient = new AuthClient(this.settings.endpoint, async () => {
-      await this.saveData({ settings: this.settings, auth: this.authClient.getState() });
+      await this.saveData({ settings: this.settings, auth: await this.authClient.getState() });
     });
     this.authClient.loadState(rawData as Record<string, unknown>);
     this.authClient.setStaticToken(this.settings.accessToken);
@@ -194,7 +194,7 @@ export default class JadePublisherPlugin extends Plugin {
   }
 
   async saveSettings() {
-    await this.saveData({ settings: this.settings, auth: this.authClient.getState() });
+    await this.saveData({ settings: this.settings, auth: await this.authClient.getState() });
   }
 
   async updateEndpoint(endpoint: string) {
