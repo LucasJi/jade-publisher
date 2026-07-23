@@ -174,15 +174,16 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         btnEl.textContent = "Signing in...";
         try {
           await this.plugin.authClient.signIn(emailVal, passwordVal);
+          btnEl.disabled = false;
+          btnEl.textContent = "Sign In";
           new Notice("Signed in successfully");
           this.plugin.refreshSession();
           this.refreshAuthUI();
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          new Notice(`Sign in failed: ${msg}`);
-        } finally {
           btnEl.disabled = false;
           btnEl.textContent = "Sign In";
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          new Notice(`Sign in failed: ${msg}`);
         }
       });
     }
