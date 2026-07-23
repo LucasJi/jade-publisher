@@ -139,46 +139,51 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           })
         );
     } else {
-      new Setting(this.authContainer).setName("Email").addText((text) => {
-        this.emailInput = text.inputEl;
-        text.inputEl.type = "email";
-        text.inputEl.addClass("jade-auth-input");
+      const authSetting = new Setting(this.authContainer).setName("Authentication");
+
+      authSetting.controlEl.empty();
+      authSetting.controlEl.addClass("jade-auth-form");
+
+      this.emailInput = authSetting.controlEl.createEl("input", {
+        type: "email",
+        placeholder: "Email",
+        cls: "jade-auth-input",
       });
 
-      new Setting(this.authContainer).setName("Password").addText((text) => {
-        this.passwordInput = text.inputEl;
-        text.inputEl.type = "password";
-        text.inputEl.addClass("jade-auth-input");
+      this.passwordInput = authSetting.controlEl.createEl("input", {
+        type: "password",
+        placeholder: "Password",
+        cls: "jade-auth-input",
       });
 
-      new Setting(this.authContainer).addButton((button) => {
-        button
-          .setButtonText("Sign In")
-          .setCta()
-          .onClick(async () => {
-            const emailVal = this.emailInput?.value.trim();
-            const passwordVal = this.passwordInput?.value;
+      const btnEl = authSetting.controlEl.createEl("button", {
+        text: "Sign In",
+        cls: "mod-cta",
+      });
 
-            if (!emailVal || !passwordVal) {
-              new Notice("Please enter email and password");
-              return;
-            }
+      btnEl.addEventListener("click", async () => {
+        const emailVal = this.emailInput.value.trim();
+        const passwordVal = this.passwordInput.value;
 
-            button.setDisabled(true);
-            button.setButtonText("Signing in...");
-            try {
-              await this.plugin.authClient.signIn(emailVal, passwordVal);
-              new Notice("Signed in successfully");
-              this.plugin.refreshSession();
-              this.refreshAuthUI();
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : "Unknown error";
-              new Notice(`Sign in failed: ${msg}`);
-            } finally {
-              button.setDisabled(false);
-              button.setButtonText("Sign In");
-            }
-          });
+        if (!emailVal || !passwordVal) {
+          new Notice("Please enter email and password");
+          return;
+        }
+
+        btnEl.disabled = true;
+        btnEl.textContent = "Signing in...";
+        try {
+          await this.plugin.authClient.signIn(emailVal, passwordVal);
+          new Notice("Signed in successfully");
+          this.plugin.refreshSession();
+          this.refreshAuthUI();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          new Notice(`Sign in failed: ${msg}`);
+        } finally {
+          btnEl.disabled = false;
+          btnEl.textContent = "Sign In";
+        }
       });
     }
   }

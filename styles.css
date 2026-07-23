@@ -19,18 +19,17 @@
   padding-bottom: var(--size-4-1);
 }
 
+.jade-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  width: 100%;
+}
+
 .jade-auth-input {
   width: 100%;
 }
 
-.jade-auth-error {
-  display: none;
-  color: var(--text-error);
-  font-size: var(--font-smaller);
-  padding: var(--size-4-1) var(--size-4-2);
-  margin-bottom: var(--size-4-2);
-}
-
-.jade-auth-error.is-visible {
-  display: block;
+.jade-auth-form button {
+  align-self: flex-start;
 }
