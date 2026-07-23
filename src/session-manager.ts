@@ -195,6 +195,12 @@ export class SessionManager {
         });
       });
 
+      if (Y.encodeStateAsUpdate(doc).length <= 50) {
+        indexeddbPersistence.destroy();
+        syncedCount++;
+        continue;
+      }
+
       const provider = new HocuspocusProvider({
         url: wsUrl,
         name: docName,
