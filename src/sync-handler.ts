@@ -97,6 +97,9 @@ export class SyncHandler {
           return;
         }
 
+        const oldDocName = `${this.plugin.vaultName}/${oldPath}`;
+        this.sessionManager.deleteOfflineData(oldDocName);
+
         const activeFile: TFile | null = this.plugin.app.workspace.getActiveFile();
         if (!activeFile || !(activeFile instanceof TFile) || activeFile.extension !== "md") {
           this.sessionManager.destroy();
@@ -120,6 +123,10 @@ export class SyncHandler {
 
           const docName = `${this.plugin.vaultName}/${file.path}`;
           this.sessionManager.deleteOfflineData(docName);
+
+          if (file.path === this.sessionManager.filePath) {
+            this.sessionManager.destroy();
+          }
         }
       })
     );
