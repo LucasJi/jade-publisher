@@ -32,6 +32,19 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Access token (fallback)")
+      .setDesc("Static token override. Takes precedence over email/password login if set.")
+      .addText((text) => {
+        text.setValue(this.plugin.settings.accessToken).onChange(async (value) => {
+          this.plugin.settings.accessToken = value;
+          this.plugin.authClient.setStaticToken(value || null);
+          await this.plugin.saveSettings();
+        });
+        text.inputEl.type = "password";
+        return text;
+      });
+
     this.authContainer = containerEl.createDiv("jade-auth-section");
     this.refreshAuthUI();
 
