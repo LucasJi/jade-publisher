@@ -1,4 +1,4 @@
-import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { type App, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
 import type JadePublisherPlugin from "./main";
 import { VaultPullService, VaultSyncService } from "./vault-operations";
 
@@ -60,10 +60,19 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
           }
           const notice = new Notice("Syncing vault...", 0);
 
+          const activeFile = this.app.workspace.getActiveFile();
+          const readFile = async (file: TFile): Promise<ArrayBuffer> => {
+            if (file === activeFile && file.extension === "md") {
+              const text = await this.app.vault.cachedRead(file);
+              return new TextEncoder().encode(text).buffer;
+            }
+            return this.app.vault.readBinary(file);
+          };
+
           try {
             const result = await this.syncService.syncAll((done, total) => {
               notice.setMessage(`Syncing vault... (${done}/${total} files)`);
-            });
+            }, readFile);
 
             notice.hide();
             new Notice(
@@ -104,6 +113,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
     const overwrite = (this.overwriteCheckbox as HTMLInputElement)?.checked ?? false;
     const notice = new Notice("Pulling vault...", 0);
 
+    this.plugin.contentWriter.beginSuppress();
     try {
       const result = await this.pullService.pullAll(overwrite, (done, total) => {
         notice.setMessage(`Pulling vault... (${done}/${total} files)`);
@@ -115,6 +125,8 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       notice.hide();
       console.error("Pull vault failed:", error);
       new Notice(`Pull failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      this.plugin.contentWriter.endSuppress();
     }
   }
 

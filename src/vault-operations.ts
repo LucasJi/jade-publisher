@@ -32,8 +32,9 @@ export class VaultSyncService {
     private vault: Vault
   ) {}
 
-  async syncAll(onProgress?: SyncProgress): Promise<SyncResult> {
+  async syncAll(onProgress?: SyncProgress, readFile?: (file: TFile) => Promise<ArrayBuffer>): Promise<SyncResult> {
     const files = this.vault.getFiles();
+    const read = readFile ?? ((file: TFile) => this.vault.readBinary(file));
 
     const startResult = await this.apiClient.startSyncTask();
     const taskId = startResult.data?.taskId as string;
@@ -46,7 +47,7 @@ export class VaultSyncService {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const content = await this.vault.readBinary(file);
+      const content = await read(file);
       const mimeType = file.extension === "md" ? "text/markdown" : getMimeType(file.extension);
 
       await this.apiClient.uploadSyncFile(taskId, file.path, content, mimeType);

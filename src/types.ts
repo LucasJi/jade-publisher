@@ -7,4 +7,6 @@ export interface JadePublisherSettings {
 export interface ContentWriter {
   get isWriting(): boolean;
   writeContent(filePath: string, content: string): void;
+  beginSuppress(): void;
+  endSuppress(): void;
 }

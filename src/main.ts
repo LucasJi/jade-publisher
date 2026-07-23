@@ -9,9 +9,10 @@ import type { ContentWriter, JadePublisherSettings } from "./types";
 
 class VaultContentWriter implements ContentWriter {
   private _isWriting = false;
+  private _suppressCount = 0;
 
   get isWriting(): boolean {
-    return this._isWriting;
+    return this._isWriting || this._suppressCount > 0;
   }
 
   constructor(
@@ -30,6 +31,14 @@ class VaultContentWriter implements ContentWriter {
       this._isWriting = false;
     }
   }
+
+  beginSuppress(): void {
+    this._suppressCount++;
+  }
+
+  endSuppress(): void {
+    this._suppressCount = Math.max(0, this._suppressCount - 1);
+  }
 }
 
 export default class JadePublisherPlugin extends Plugin {
@@ -37,6 +46,7 @@ export default class JadePublisherPlugin extends Plugin {
   vaultName = "";
   authClient!: AuthClient;
   apiClient!: ApiClient;
+  contentWriter!: ContentWriter;
   private sessionManager!: SessionManager;
   private statusBarItem!: HTMLElement;
   private needsFlush = false;
@@ -86,7 +96,7 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.apiClient = new ApiClient(this.settings.endpoint, this.vaultName, this.authClient);
 
-    const contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
+    this.contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
       this.app.vault.getAbstractFileByPath(filePath) instanceof TFile
         ? (this.app.vault.getAbstractFileByPath(filePath) as TFile)
         : null
@@ -96,7 +106,7 @@ export default class JadePublisherPlugin extends Plugin {
       this.vaultName,
       this.settings.endpoint,
       () => this.authClient.getToken(),
-      contentWriter
+      this.contentWriter
     );
 
     this.statusBarItem = this.addStatusBarItem();
@@ -124,7 +134,7 @@ export default class JadePublisherPlugin extends Plugin {
       this.triggerFlush();
     }, 3000);
 
-    const syncHandler = new SyncHandler(this, this.sessionManager, contentWriter);
+    const syncHandler = new SyncHandler(this, this.sessionManager, this.contentWriter);
     syncHandler.registerEvents();
 
     this.registerEvent(
