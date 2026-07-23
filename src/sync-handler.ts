@@ -35,6 +35,7 @@ export class SyncHandler {
 
         const activeFile: TFile | null = this.plugin.app.workspace.getActiveFile();
         if (file !== activeFile) {
+          console.log(`Non-active file ${file.path} modified, skip real-time sync (only active file syncs)`);
           return;
         }
 
@@ -117,12 +118,15 @@ export class SyncHandler {
         console.log(`Delete file ${file.path}`);
 
         if (file instanceof TFile && file.extension === "md") {
-          this.plugin.apiClient.deleteNote(file.path).catch((error) => {
-            console.error(`Failed to sync deletion of ${file.path}:`, error);
-          });
-
-          const docName = `${this.plugin.vaultName}/${file.path}`;
-          this.sessionManager.deleteOfflineData(docName);
+          this.plugin.apiClient
+            .deleteNote(file.path)
+            .then(() => {
+              const docName = `${this.plugin.vaultName}/${file.path}`;
+              this.sessionManager.deleteOfflineData(docName);
+            })
+            .catch((error) => {
+              console.error(`Failed to sync deletion of ${file.path}:`, error);
+            });
 
           if (file.path === this.sessionManager.filePath) {
             this.sessionManager.destroy();

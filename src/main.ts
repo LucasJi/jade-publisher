@@ -96,11 +96,10 @@ export default class JadePublisherPlugin extends Plugin {
 
     this.apiClient = new ApiClient(this.settings.endpoint, this.vaultName, this.authClient);
 
-    this.contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) =>
-      this.app.vault.getAbstractFileByPath(filePath) instanceof TFile
-        ? (this.app.vault.getAbstractFileByPath(filePath) as TFile)
-        : null
-    );
+    this.contentWriter = new VaultContentWriter(this.app.vault, (filePath: string) => {
+      const abstractFile = this.app.vault.getAbstractFileByPath(filePath);
+      return abstractFile instanceof TFile ? abstractFile : null;
+    });
 
     this.sessionManager = new SessionManager(
       this.vaultName,

@@ -93,7 +93,8 @@ export class SessionManager {
       .filter((db): db is { name: string } => db.name != null && db.name.startsWith(vaultPrefix))
       .map((db) => db.name);
 
-    const inactiveDocNames = vaultDocNames.filter((n) => n !== this.activeDocName);
+    const currentActiveDocName = this.activeDocName;
+    const inactiveDocNames = vaultDocNames.filter((n) => n !== currentActiveDocName);
 
     if (inactiveDocNames.length === 0) {
       return 0;
@@ -115,9 +116,11 @@ export class SessionManager {
       const doc = new Y.Doc();
       const indexeddbPersistence = new IndexeddbPersistence(docName, doc);
 
+      let idxSynced = false;
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(resolve, 5000);
         indexeddbPersistence.on("synced", () => {
+          idxSynced = true;
           clearTimeout(timeout);
           resolve();
         });
@@ -130,6 +133,7 @@ export class SessionManager {
         token,
       });
 
+      let providerSynced = false;
       await new Promise<void>((resolve) => {
         let settled = false;
         const timeout = setTimeout(() => {
@@ -148,11 +152,16 @@ export class SessionManager {
           resolve();
         };
 
-        provider.on("synced", cleanup);
+        provider.on("synced", () => {
+          providerSynced = true;
+          cleanup();
+        });
         provider.on("connectionError", cleanup);
       });
 
-      syncedCount++;
+      if (idxSynced || providerSynced) {
+        syncedCount++;
+      }
       onProgress(syncedCount, total);
     }
 
@@ -185,7 +194,10 @@ export class SessionManager {
         url: wsUrl,
         name: docName,
         document: ydoc,
-        token,
+        token: () => {
+          const result = this.getToken();
+          return Promise.resolve(result).then((t) => t ?? "");
+        },
         onConnect: () => {
           if (generation !== this.sessionGeneration) return;
           console.log(`Doc "${docName}" connects to server successfully!`);
