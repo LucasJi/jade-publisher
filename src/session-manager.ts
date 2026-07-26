@@ -341,7 +341,7 @@ export class SessionManager {
     const filePath = file.path;
     const docName = `${this.vaultName}/${filePath}`;
 
-    if (this.activeDocName === docName && !forceReconnect) {
+    if (this.activeDocName === docName && !forceReconnect && this.activeProvider) {
       return;
     }
 
