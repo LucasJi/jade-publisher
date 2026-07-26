@@ -160,7 +160,7 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
       btn
         .setButtonText("Sign In")
         .setCta()
-        .onClick(async () => {
+        .onClick(() => {
           const emailVal = this.emailInput.value.trim();
           const passwordVal = this.passwordInput.value;
 
@@ -169,19 +169,22 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
             return;
           }
 
-        btn.setDisabled(true);
-        btn.setButtonText("Signing in...");
-        try {
-          await this.plugin.authClient.signIn(emailVal, passwordVal);
-          new Notice("Signed in successfully");
-          this.plugin.refreshSession();
-          this.refreshAuthUI();
-        } catch (err) {
-          btn.setDisabled(false);
-          btn.setButtonText("Sign In");
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          new Notice(`Sign in failed: ${msg}`);
-        }
+          btn.setDisabled(true);
+          btn.setButtonText("Signing in...");
+
+          setTimeout(async () => {
+            try {
+              await this.plugin.authClient.signIn(emailVal, passwordVal);
+              new Notice("Signed in successfully");
+              this.plugin.refreshSession();
+              this.refreshAuthUI();
+            } catch (err) {
+              btn.setDisabled(false);
+              btn.setButtonText("Sign In");
+              const msg = err instanceof Error ? err.message : "Unknown error";
+              new Notice(`Sign in failed: ${msg}`);
+            }
+          }, 100);
         });
     }
   }
