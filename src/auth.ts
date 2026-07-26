@@ -34,13 +34,6 @@ export class AuthClient {
     tokenExpiry: number;
     userEmail: string | null;
   }> {
-    if (this.refreshPromise) {
-      try {
-        await this.refreshPromise;
-      } catch {
-        // refresh failed, state already cleared
-      }
-    }
     return {
       token: this.cachedToken,
       refreshToken: this.refreshToken,
@@ -141,22 +134,30 @@ export class AuthClient {
   }
 
   private async doRefresh() {
-    const resp = await fetch(`${this.baseUrl}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: this.refreshToken }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
 
-    const json = await resp.json();
+    try {
+      const resp = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: this.refreshToken }),
+        signal: controller.signal,
+      });
 
-    if (json.code !== 0) {
-      throw new Error(json.msg ?? "Token refresh failed");
+      const json = await resp.json();
+
+      if (json.code !== 0) {
+        throw new Error(json.msg ?? "Token refresh failed");
+      }
+
+      this.cachedToken = json.data.access_token;
+      this.refreshToken = json.data.refresh_token;
+      this.tokenExpiry = (json.data.expires_at as number) * 1000;
+
+      await this.saveFn?.();
+    } finally {
+      clearTimeout(timer);
     }
-
-    this.cachedToken = json.data.access_token;
-    this.refreshToken = json.data.refresh_token;
-    this.tokenExpiry = (json.data.expires_at as number) * 1000;
-
-    await this.saveFn?.();
   }
 }
