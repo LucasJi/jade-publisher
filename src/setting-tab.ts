@@ -1,4 +1,4 @@
-import { type App, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
+import { type App, ButtonComponent, Notice, PluginSettingTab, Setting, type TFile } from "obsidian";
 import type JadePublisherPlugin from "./main";
 import { VaultPullService, VaultSyncService } from "./vault-operations";
 
@@ -156,36 +156,35 @@ export default class Ob2JadeSettingTab extends PluginSettingTab {
         cls: "jade-auth-input",
       });
 
-      const btnEl = authSetting.controlEl.createEl("button", {
-        text: "Sign In",
-        cls: "mod-cta",
-      });
+      const btn = new ButtonComponent(authSetting.controlEl);
+      btn
+        .setButtonText("Sign In")
+        .setCta()
+        .onClick(async () => {
+          const emailVal = this.emailInput.value.trim();
+          const passwordVal = this.passwordInput.value;
 
-      btnEl.addEventListener("click", async () => {
-        const emailVal = this.emailInput.value.trim();
-        const passwordVal = this.passwordInput.value;
+          if (!emailVal || !passwordVal) {
+            new Notice("Please enter email and password");
+            return;
+          }
 
-        if (!emailVal || !passwordVal) {
-          new Notice("Please enter email and password");
-          return;
-        }
-
-        btnEl.disabled = true;
-        btnEl.textContent = "Signing in...";
-        try {
-          await this.plugin.authClient.signIn(emailVal, passwordVal);
-          btnEl.disabled = false;
-          btnEl.textContent = "Sign In";
-          new Notice("Signed in successfully");
-          this.plugin.refreshSession();
-          this.refreshAuthUI();
-        } catch (err) {
-          btnEl.disabled = false;
-          btnEl.textContent = "Sign In";
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          new Notice(`Sign in failed: ${msg}`);
-        }
-      });
+          btn.setDisabled(true);
+          btn.setButtonText("Signing in...");
+          try {
+            await this.plugin.authClient.signIn(emailVal, passwordVal);
+            btn.setDisabled(false);
+            btn.setButtonText("Sign In");
+            new Notice("Signed in successfully");
+            this.plugin.refreshSession();
+            this.refreshAuthUI();
+          } catch (err) {
+            btn.setDisabled(false);
+            btn.setButtonText("Sign In");
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            new Notice(`Sign in failed: ${msg}`);
+          }
+        });
     }
   }
 }

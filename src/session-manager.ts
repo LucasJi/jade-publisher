@@ -28,6 +28,10 @@ export class SessionManager {
     private contentWriter: ContentWriter
   ) {}
 
+  setEndpoint(url: string): void {
+    this.endpoint = url;
+  }
+
   get docName(): string | null {
     return this.activeDocName;
   }

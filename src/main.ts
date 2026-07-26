@@ -214,6 +214,7 @@ export default class JadePublisherPlugin extends Plugin {
     this.settings.endpoint = endpoint;
     this.authClient.setEndpoint(endpoint);
     this.apiClient.setEndpoint(endpoint);
+    this.sessionManager.setEndpoint(endpoint);
     await this.saveSettings();
     await this.refreshSession();
   }
